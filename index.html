@@ -4410,7 +4410,7 @@ async function plSyncGCal(){
     if(!evt.data||evt.data.type!=='gcal_oauth_code')return;
     _gcalFinish(evt.data.code);
   };
-  // Méthode 2 : storage event (Safari — window.opener détruit après cross-origin)
+  // Méthode 2 : storage event (Safari)
   const _storH=function(e){
     if(e.key!=='gcal_oauth_result')return;
     try{
@@ -4421,6 +4421,29 @@ async function plSyncGCal(){
       }
     }catch{}
   };
+  // Méthode 3 : polling actif (le plus fiable — fonctionne sur tous les navigateurs)
+  let _pollCount=0;
+  const _poll=setInterval(function(){
+    _pollCount++;
+    if(_pollCount>120){clearInterval(_poll);return;} // timeout 60s
+    try{
+      const raw=localStorage.getItem('gcal_oauth_result');
+      if(!raw)return;
+      const d=JSON.parse(raw);
+      if(d.code&&(Date.now()-d.ts)<300000){
+        clearInterval(_poll);
+        localStorage.removeItem('gcal_oauth_result');
+        _gcalFinish(d.code);
+      }
+    }catch{}
+    // Aussi vérifier si la popup est fermée avec un code dans l'URL (cas rare)
+    try{
+      if(popup&&popup.closed&&!_gcalHandled){
+        clearInterval(_poll);
+        if(btn)btn.textContent='🔄 Sync GCal';
+      }
+    }catch{}
+  },500);
   window.addEventListener('message',_msgH);
   window.addEventListener('storage',_storH);
 }
