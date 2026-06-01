@@ -2087,7 +2087,15 @@ function load() {
   transactions = JSON.parse(JSON.stringify(SEED_TRANSACTIONS));
 }
 
+// Flag pour bloquer save() pendant le chargement initial Supabase
+let sbInitialLoading = true;
+
 function save() {
+  if (sbInitialLoading) {
+    // Sauvegarde locale uniquement pendant le chargement initial
+    try { localStorage.setItem(SK, JSON.stringify({prospects,factures,transactions,saved:new Date().toISOString()})); } catch(e) {}
+    return;
+  }
   try { localStorage.setItem(SK, JSON.stringify({prospects,factures,transactions,saved:new Date().toISOString()})); }
   catch(e) { showToast('⚠ Stockage plein'); return; }
   document.getElementById('last-save').textContent = `Sauvegardé ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
@@ -6155,9 +6163,15 @@ async function sbLoadAll() {
     if (changed) {
       renderDashboard(); renderPipeline(); renderFacturation(); renderTresorerie();
       tpRender(); twRender();
+      updateGlobalKPIs();
+      populateClientSelects();
     }
-    sbStatus('☁ Synchronisé');
+    sbStatus('☁ Synchronisé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
   } catch(e) { sbStatus('⚠ Hors ligne'); }
+  finally {
+    // Débloquer save() après le premier chargement Supabase
+    sbInitialLoading = false;
+  }
 }
 
 // Sauvegarde silencieuse (sans toast)
@@ -6172,9 +6186,17 @@ function sbAutoSave() {
 
 // Polling toutes les 30s pour sync entre appareils + auto-save toutes les 2 min
 window.addEventListener('load', function() {
-  sbLoadAll();
-  setInterval(sbLoadAll, 30000);   // sync depuis Supabase
-  setInterval(sbAutoSave, 120000); // auto-save toutes les 2 min
+  // Chargement initial depuis Supabase (prioritaire sur localStorage)
+  sbStatus('↺ Chargement depuis le cloud…');
+  sbLoadAll().then(() => {
+    // Après le premier chargement, lancer le polling
+    setInterval(sbLoadAll, 30000);   // sync depuis Supabase
+    setInterval(sbAutoSave, 120000); // auto-save toutes les 2 min
+  }).catch(() => {
+    sbInitialLoading = false; // Débloquer même en cas d'erreur
+    setInterval(sbLoadAll, 30000);
+    setInterval(sbAutoSave, 120000);
+  });
 });
 
 // ─────────────────────────────────────────────
