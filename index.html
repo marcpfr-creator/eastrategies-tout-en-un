@@ -3247,8 +3247,11 @@ function saveAndSync() {
 // ═══════════════════════════════════════════════════════
 const ICAL_URL = 'https://p162-caldav.icloud.com/published/2/MTk0ODc5NjI2MTk0ODc5NnLErrSuR1nX3uoLQpIJEHTYmKBdhdgOvjkZY92wZFVs_qcDCKgMzre89vTS2aO1bOeSGOdMzLakLf_vL8acxQk';
 const CORS_PROXIES = [
+  '',
   'https://corsproxy.io/?',
-  'https://api.allorigins.win/raw?url='
+  'https://api.allorigins.win/raw?url=',
+  'https://cors-anywhere.herokuapp.com/',
+  'https://thingproxy.freeboard.io/fetch/'
 ];
 let calEvents = [];
 let calViewDate = new Date();
@@ -4292,6 +4295,21 @@ function plMergeGCal(){
   });
 }
 
+// ─── ICAL FETCH HELPER ───────────────────────────────────────────
+async function _fetchICSText(url){
+  const clean=url.replace(/^webcal:/,'https:');
+  for(let i=0;i<CORS_PROXIES.length;i++){
+    try{
+      const fetchUrl=CORS_PROXIES[i]===''?clean:CORS_PROXIES[i]+encodeURIComponent(clean);
+      const res=await fetch(fetchUrl,{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'text/calendar,*/*'}});
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      const text=await res.text();
+      if(!text.includes('BEGIN:VCALENDAR'))throw new Error('Format invalide');
+      return text;
+    }catch(e){console.warn('[iCal] proxy '+i+' échoué:',e.message);}
+  }
+  throw new Error('Tous les proxies ont échoué — vérifie ta connexion ou l\'URL');
+}
 // ─── ICAL (APPLE CALENDAR / iCLOUD) ──────────────────────────────
 function _dtLocal(d){
   if(!d||isNaN(d))return'';
@@ -4327,32 +4345,24 @@ async function plSyncICal(forcePrompt){
     url=input.trim();
     localStorage.setItem('ical_planning_url',url);
   }
-  url=url.replace(/^webcal:/,'https:');
   if(!url){alert('URL iCloud non configurée.');if(btn)btn.textContent='📱 iCal';return;}
-  let lastErr='';
-  for(let i=0;i<CORS_PROXIES.length;i++){
-    try{
-      const proxyUrl=CORS_PROXIES[i]+encodeURIComponent(url);
-      const res=await fetch(proxyUrl,{headers:{'X-Requested-With':'XMLHttpRequest'}});
-      if(!res.ok)throw new Error('HTTP '+res.status);
-      const text=await res.text();
-      if(!text.includes('BEGIN:VCALENDAR'))throw new Error('Format invalide');
-      const icsEvs=parseICS(text);
-      const plEvs=icsEvs.map(ev=>({
-        event_id:ev.uid||('ical_'+Math.random().toString(36).slice(2)),
-        title:ev.summary||'Événement',
-        start_time:_dtLocal(ev.start),
-        end_time:ev.end?_dtLocal(ev.end):'',
-      }));
-      localStorage.setItem('icalEvents',JSON.stringify(plEvs));
-      plMergeAllICal(plEvs);
-      plRender();
-      if(btn)btn.textContent='✅ iCal ('+plEvs.length+')';
-      return;
-    }catch(e){lastErr=e.message;}
+  try{
+    const text=await _fetchICSText(url);
+    const icsEvs=parseICS(text);
+    const plEvs=icsEvs.map(ev=>({
+      event_id:ev.uid||('ical_'+Math.random().toString(36).slice(2)),
+      title:ev.summary||'Événement',
+      start_time:_dtLocal(ev.start),
+      end_time:ev.end?_dtLocal(ev.end):'',
+    }));
+    localStorage.setItem('icalEvents',JSON.stringify(plEvs));
+    plMergeAllICal(plEvs);
+    plRender();
+    if(btn)btn.textContent='✅ iCal ('+plEvs.length+')';
+  }catch(e){
+    if(btn)btn.textContent='❌ iCal';
+    alert('Erreur iCal : '+e.message);
   }
-  if(btn)btn.textContent='❌ iCal';
-  alert('Erreur iCal : '+lastErr);
 }
 // ─── SYNC TOUT (Apple + Google) ──────────────────────────────────
 async function plSyncTout(){
@@ -4362,28 +4372,19 @@ async function plSyncTout(){
   // 1. Apple Calendar (iCal)
   try{
     let url=(localStorage.getItem('ical_planning_url')||ICAL_PLANNING_URL).replace(/^webcal:/,'https:');
-    let fetched=false;
-    for(let i=0;i<CORS_PROXIES.length;i++){
-      try{
-        const res=await fetch(CORS_PROXIES[i]+encodeURIComponent(url),{headers:{'X-Requested-With':'XMLHttpRequest'}});
-        if(!res.ok)throw new Error('HTTP '+res.status);
-        const text=await res.text();
-        if(!text.includes('BEGIN:VCALENDAR'))throw new Error('Format invalide');
-        const icsEvs=parseICS(text);
-        const plEvs=icsEvs.map(ev=>({
-          event_id:ev.uid||('ical_'+Math.random().toString(36).slice(2)),
-          title:ev.summary||'Événement',
-          start_time:_dtLocal(ev.start),
-          end_time:ev.end?_dtLocal(ev.end):'',
-        }));
-        localStorage.setItem('icalEvents',JSON.stringify(plEvs));
-        plMergeAllICal(plEvs);
-        total+=plEvs.length;
-        fetched=true;
-        break;
-      }catch(e){}
-    }
-    if(!fetched)console.warn('[SyncTout] iCal échec');
+    try{
+      const text=await _fetchICSText(url);
+      const icsEvs=parseICS(text);
+      const plEvs=icsEvs.map(ev=>({
+        event_id:ev.uid||('ical_'+Math.random().toString(36).slice(2)),
+        title:ev.summary||'Événement',
+        start_time:_dtLocal(ev.start),
+        end_time:ev.end?_dtLocal(ev.end):'',
+      }));
+      localStorage.setItem('icalEvents',JSON.stringify(plEvs));
+      plMergeAllICal(plEvs);
+      total+=plEvs.length;
+    }catch(e){console.warn('[SyncTout] iCal:',e.message);}
   }catch(e){console.error('[SyncTout] iCal',e);}
   // 2. Google Calendar (si token présent)
   if(gcalAccessToken){
