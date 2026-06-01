@@ -4170,24 +4170,39 @@ async function gcalFetchEvents(){
     const mon=plMon(plWKey);
     const tMin=new Date(mon);tMin.setDate(mon.getDate()-1);
     const tMax=new Date(mon);tMax.setDate(mon.getDate()+14);
-    const url='https://www.googleapis.com/calendar/v3/calendars/primary/events'
-      +'?timeMin='+encodeURIComponent(tMin.toISOString())
-      +'&timeMax='+encodeURIComponent(tMax.toISOString())
-      +'&singleEvents=true&orderBy=startTime&maxResults=100';
-    const resp=await fetch(url,{headers:{Authorization:'Bearer '+gcalAccessToken}});
-    if(!resp.ok){
-      if(resp.status===401){gcalAccessToken=null;localStorage.removeItem('gcalAccessToken');alert('Session expirée, reconnecte-toi.');}
+    const tMinS=encodeURIComponent(tMin.toISOString());
+    const tMaxS=encodeURIComponent(tMax.toISOString());
+    const params='?timeMin='+tMinS+'&timeMax='+tMaxS+'&singleEvents=true&orderBy=startTime&maxResults=200';
+    const headers={Authorization:'Bearer '+gcalAccessToken};
+    // Récupérer tous les calendriers visibles
+    const clResp=await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList',{headers});
+    if(!clResp.ok){
+      if(clResp.status===401){gcalAccessToken=null;localStorage.removeItem('gcalAccessToken');alert('Session expirée, reconnecte-toi.');}
       return;
     }
-    const data=await resp.json();
-    calEvents=(data.items||[]).map(ev=>({
-      event_id:ev.id,
-      title:ev.summary||'Événement',
-      start_time:(ev.start.dateTime||ev.start.date+'T00:00:00').substring(0,19),
-      end_time:(ev.end.dateTime||ev.end.date+'T00:00:00').substring(0,19),
+    const clData=await clResp.json();
+    const calendars=(clData.items||[]).filter(c=>c.selected!==false);
+    // Fetch events from all calendars in parallel
+    const allEvents=[];
+    await Promise.all(calendars.map(async cal=>{
+      try{
+        const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(cal.id)+'/events'+params,{headers});
+        if(!r.ok)return;
+        const d=await r.json();
+        (d.items||[]).forEach(ev=>{
+          allEvents.push({
+            event_id:ev.id,
+            title:ev.summary||'Événement',
+            start_time:(ev.start.dateTime||ev.start.date+'T00:00:00').substring(0,19),
+            end_time:(ev.end.dateTime||ev.end.date+'T00:00:00').substring(0,19),
+            cal_name:cal.summary||'',
+          });
+        });
+      }catch(e){}
     }));
+    calEvents=allEvents;
     localStorage.setItem('gcalEvents',JSON.stringify(calEvents));
-    console.log('[GCal] '+calEvents.length+' événements chargés');
+    console.log('[GCal] '+calEvents.length+' événements chargés depuis '+calendars.length+' calendriers');
   }catch(e){console.error('[GCal]',e);}
 }
 
