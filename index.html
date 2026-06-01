@@ -3895,6 +3895,7 @@ function renderAgenda(){
     <div class="pl-header-right">
       <button class="pl-btn" onclick="plGoToday()">📍 Aujourd'hui</button>
       <button class="pl-btn" onclick="plSyncGCal()">🔄 Sync GCal</button>
+      <button class="pl-btn" onclick="plImportCalPub()" title="Importer le calendrier éditorial">📋 Cal. Pub</button>
       <div class="pl-week-nav">
         <button onclick="plPrevWeek()">← Préc.</button>
         <span class="pl-week-label" id="pl-week-label">—</span>
@@ -3934,7 +3935,7 @@ function plMon(wKey){
 }
 function plDays(wKey){
   const mon=plMon(wKey);
-  return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return{date:d.toISOString().substring(0,10),dow:d.getDay(),d};});
+  return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);const ld=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return{date:ld,dow:d.getDay(),d};});
 }
 function plAdd(wKey,n){const mon=plMon(wKey);mon.setDate(mon.getDate()+7*n);return plISO(mon);}
 function plWLabel(wKey){
@@ -4283,6 +4284,69 @@ function jRenderPlanningPanel(){
     if(!data){panel.innerHTML='';return;}
     panel.innerHTML=`<div class="j-pl-panel"><h4>📅 Planning — ${data.dayName||data.date}<button class="j-pl-close" onclick="localStorage.removeItem('plJournee');jRenderPlanningPanel()">×</button></h4>${(data.blocks||[]).slice(0,10).map(b=>`<div class="j-pl-block cat-${b.cat||'pause'}"><span class="j-pl-time">${b.t||''}</span><span class="j-pl-title">${b.ico||''} ${b.title||''}</span></div>`).join('')}<div class="j-pl-footer">Depuis Planning Semaine · <a href="#" onclick="const btn=document.querySelector('.tab-btn[onclick*=planning]');if(btn)switchTab('planning',btn);return false">Retour</a></div></div>`;
   }catch(e){}
+}
+
+// ─── CALENDRIER ÉDITORIAL ────────────────────────────────────────
+const PL_CAL_PUB=[
+  {blog:'2026-06-02',social:'2026-06-03',wpid:8421,titre:'Sourcing industriel en Europe de l\'Est'},
+  {blog:'2026-06-03',social:'2026-06-04',wpid:8388,titre:'Bulgarie : le taux d\'IS le plus bas de l\'UE'},
+  {blog:'2026-06-04',social:'2026-06-05',wpid:7516,titre:'Recrutement en Bulgarie'},
+  {blog:'2026-06-05',social:'2026-06-06',wpid:8422,titre:'34 ans à Bucarest : parcours entrepreneur'},
+  {blog:'2026-06-08',social:'2026-06-09',wpid:8389,titre:'Sourcing : l\'erreur du fournisseur moins cher'},
+  {blog:'2026-06-09',social:'2026-06-10',wpid:7514,titre:'Moldavie : marché émergent'},
+  {blog:'2026-06-10',social:'2026-06-11',wpid:8390,titre:'Réussir son implantation en Europe centrale'},
+  {blog:'2026-06-11',social:'2026-06-12',wpid:8139,titre:'Faire des affaires en Roumanie 2026'},
+  {blog:'2026-06-15',social:'2026-06-16',wpid:8391,titre:'Un partenaire unique pour 10 marchés'},
+  {blog:'2026-06-16',social:'2026-06-17',wpid:8141,titre:'Faire des affaires en Bosnie-Herzégovine'},
+  {blog:'2026-06-17',social:'2026-06-18',wpid:8392,titre:'Les vrais freins des PME françaises'},
+  {blog:'2026-06-18',social:'2026-06-19',wpid:8143,titre:'Faire des affaires en Turquie'},
+  {blog:'2026-06-22',social:'2026-06-23',wpid:8393,titre:'Debrecen : nouveau hub automobile'},
+  {blog:'2026-06-23',social:'2026-06-24',wpid:8145,titre:'Faire des affaires en Bulgarie'},
+  {blog:'2026-06-24',social:'2026-06-25',wpid:8394,titre:'Sourcing en Turquie'},
+  {blog:'2026-06-25',social:'2026-06-26',wpid:8147,titre:'Faire des affaires en Hongrie'},
+  {blog:'2026-06-29',social:'2026-06-30',wpid:8395,titre:'Audit terrain Roumanie'},
+  {blog:'2026-06-30',social:'2026-07-01',wpid:8149,titre:'Faire des affaires en Moldavie'},
+  {blog:'2026-07-01',social:'2026-07-02',wpid:8396,titre:'Management de transition CEE'},
+  {blog:'2026-07-02',social:'2026-07-03',wpid:8151,titre:'Faire des affaires en Tchéquie'},
+  {blog:'2026-07-06',social:'2026-07-07',wpid:8397,titre:'La confiance : clé du succès en CEE'},
+  {blog:'2026-07-07',social:'2026-07-08',wpid:8153,titre:'Faire des affaires en Slovaquie'},
+  {blog:'2026-07-08',social:'2026-07-09',wpid:8155,titre:'Faire des affaires en Serbie'},
+  {blog:'2026-07-09',social:'2026-07-10',wpid:8157,titre:'Faire des affaires en Grèce'},
+  {blog:'2026-07-13',social:'2026-07-14',wpid:8440,titre:'Faire des affaires en Tchéquie (guide complet)'},
+  {blog:'2026-07-14',social:'2026-07-15',wpid:8441,titre:'Recrutement en Roumanie'},
+  {blog:'2026-07-15',social:'2026-07-16',wpid:8442,titre:'Faire des affaires en Slovaquie (guide)'},
+  {blog:'2026-07-16',social:'2026-07-17',wpid:8443,titre:'Management de transition en Roumanie'},
+  {blog:'2026-07-20',social:'2026-07-21',wpid:8444,titre:'Faire des affaires en Serbie (guide)'},
+  {blog:'2026-07-21',social:'2026-07-22',wpid:8445,titre:'Implantation en Serbie'},
+  {blog:'2026-07-22',social:'2026-07-23',wpid:8446,titre:'Faire des affaires en Grèce (guide)'},
+  {blog:'2026-07-23',social:'2026-07-24',wpid:8447,titre:'Sourcing en Bulgarie'},
+  {blog:'2026-07-27',social:'2026-07-28',wpid:8448,titre:'Investir en Slovaquie'},
+  {blog:'2026-07-28',social:'2026-07-29',wpid:8449,titre:'Faire des affaires en Hongrie (guide)'},
+  {blog:'2026-07-29',social:'2026-07-30',wpid:8450,titre:'Sourcing industriel en Tchéquie'},
+  {blog:'2026-07-30',social:'2026-07-31',wpid:8451,titre:'Eastrategies® : 30 ans d\'expertise CEE'},
+];
+
+function plImportCalPub(){
+  let count=0;
+  PL_CAL_PUB.forEach(({blog,social,wpid,titre})=>{
+    [[blog,'📝','blog','Blog · WP#'+wpid],[social,'📱','social','Réseaux · WP#'+wpid]].forEach(([dateStr,ico,prefix,sub])=>{
+      const d=new Date(dateStr+'T12:00:00');
+      const wKey=plISO(d);
+      const days=plDays(wKey);
+      const di=days.findIndex(day=>day.date===dateStr);
+      if(di<0)return;
+      const cu=PLS.cu(wKey,di);
+      const cid=prefix+'_'+wpid;
+      if(cu.some(c=>c._cid===cid))return;
+      cu.push({t:'',title:titre,sub,cat:'contenu',ico,_cid:cid});
+      PLS.saveCu(wKey,di,cu);
+      count++;
+    });
+  });
+  plRender();
+  const btn=document.querySelector('.pl-btn[onclick*=plImportCalPub]');
+  if(btn)btn.textContent='✅ '+count+' blocs';
+  setTimeout(()=>{if(btn)btn.textContent='📋 Cal. Pub';},3000);
 }
 
 // ─── INIT ────────────────────────────────────────────────────────
