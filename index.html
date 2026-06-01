@@ -4244,7 +4244,6 @@ function plGCal(title,date,tr,desc){
 
 // ─── GOOGLE CALENDAR OAUTH — PKCE ────────────────────────────────
 const GCAL_CLIENT_ID='1034644588520-5461t8kughc8g3klhg7v30g89eelmqnd.apps.googleusercontent.com';
-const GCAL_CLIENT_SECRET=['GOCSPX','-q9nXCiVT_OJlsmBER0twTm9WQ5cQ'].join('');
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 let gcalAccessToken=null;
 (function(){
@@ -4287,7 +4286,6 @@ async function _gcalExchange(code){
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body:new URLSearchParams({
         client_id:GCAL_CLIENT_ID,
-        client_secret:GCAL_CLIENT_SECRET,
         code,
         code_verifier:verifier,
         grant_type:'authorization_code',
