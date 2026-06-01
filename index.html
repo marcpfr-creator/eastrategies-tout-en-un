@@ -4315,10 +4315,18 @@ function plMergeAllICal(evs){
     });
   });
 }
-async function plSyncICal(){
+const ICAL_PLANNING_URL='webcal://p102-caldav.icloud.com/published/2/MTk0ODc5NjI2MTk0ODc5NnLErrSuR1nX3uoLQpIJEHSlX2Kq_EDrcz_Iz763CPFoRBxh9o2VZ83a7yt2OvILhtTd7j7zt8C8bW-vtUkYI_0';
+async function plSyncICal(forcePrompt){
   const btn=document.getElementById('pl-ical-btn');
   if(btn)btn.textContent='🔄 iCal…';
-  const url=(typeof ICAL_URL!=='undefined'?ICAL_URL:'').replace(/^webcal:/,'https:');
+  let url=localStorage.getItem('ical_planning_url')||ICAL_PLANNING_URL;
+  if(forcePrompt){
+    const input=prompt('📱 Calendrier Apple — URL de partage iCloud',url);
+    if(!input){if(btn)btn.textContent='📱 iCal';return;}
+    url=input.trim();
+    localStorage.setItem('ical_planning_url',url);
+  }
+  url=url.replace(/^webcal:/,'https:');
   if(!url){alert('URL iCloud non configurée.');if(btn)btn.textContent='📱 iCal';return;}
   let lastErr='';
   for(let i=0;i<CORS_PROXIES.length;i++){
