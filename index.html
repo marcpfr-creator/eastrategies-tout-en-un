@@ -3967,6 +3967,7 @@ function renderAgenda(){
         <div class="ag-cfg-actions" style="margin-top:10px;">
           <button class="ag-cfg-btn ag-cfg-btn-primary" id="ag-btn-gcal-connect" onclick="plSyncGCal()">🔗 Connecter Google</button>
           <button class="ag-cfg-btn ag-cfg-btn-danger" id="ag-btn-gcal-disconnect" onclick="agDisconnectGCal()" style="display:none">🔓 Déconnecter</button>
+          <button class="ag-cfg-btn ag-cfg-btn-outline" onclick="agClearGCalCache()" title="Vider le cache et forcer une nouvelle connexion">🗑️ Vider cache</button>
         </div>
       </div>
 
@@ -4850,6 +4851,18 @@ function agSetStatus(src, state, label) {
   const lbl = document.getElementById('ag-lbl-' + src);
   if (dot) dot.className = 'ag-cfg-dot ' + state;
   if (lbl) lbl.textContent = label || state;
+}
+
+function agClearGCalCache() {
+  gcalAccessToken = null;
+  localStorage.removeItem('gcalAccessToken');
+  localStorage.removeItem('gcalEvents');
+  localStorage.removeItem('gcal_oauth_result');
+  sessionStorage.removeItem('gcal_v');
+  agSetStatus('gcal', 'idle', 'Non connecté');
+  const btnC = document.getElementById('ag-btn-gcal-connect'); if (btnC) btnC.style.display = 'inline-block';
+  const btnD = document.getElementById('ag-btn-gcal-disconnect'); if (btnD) btnD.style.display = 'none';
+  alert('Cache GCal vidé ✔\nCliquez sur "🔗 Connecter Google" pour vous reconnecter.');
 }
 
 function agCopyRedirectUri() {
