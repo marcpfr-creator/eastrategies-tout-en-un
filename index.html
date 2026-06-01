@@ -3915,6 +3915,7 @@ function renderAgenda(){
     <div class="pl-header-right">
       <button class="pl-btn" onclick="plGoToday()">📍 Aujourd'hui</button>
       <button class="pl-btn" id="pl-sync-all-btn" onclick="plSyncTout()" title="Sync Apple Calendar + Google Calendar">🔄 Sync Tout</button>
+      <label class="pl-btn" title="Importer un fichier .ics depuis ton Mac/iPhone" style="cursor:pointer">📂 .ics<input type="file" accept=".ics,.ical" style="display:none" onchange="plImportICSFile(this)"></label>
       <button class="pl-btn" id="pl-ical-btn" onclick="plSyncICal()" title="Importer depuis Calendrier Apple (iCloud)">📱 iCal</button>
       <button class="pl-btn" onclick="plSyncGCal()">🔄 GCal</button>
       <button class="pl-btn" onclick="plDisconnectGCal()" title="Déconnecter Google Calendar">🔓 GCal</button>
@@ -4363,6 +4364,30 @@ async function plSyncICal(forcePrompt){
     if(btn)btn.textContent='❌ iCal';
     alert('Erreur iCal : '+e.message);
   }
+}
+// ─── IMPORT FICHIER .ICS ─────────────────────────────────────────
+function plImportICSFile(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const text=e.target.result;
+      if(!text.includes('BEGIN:VCALENDAR'))throw new Error('Fichier invalide');
+      const icsEvs=parseICS(text);
+      const plEvs=icsEvs.map(ev=>({
+        event_id:ev.uid||('ical_'+Math.random().toString(36).slice(2)),
+        title:ev.summary||'Événement',
+        start_time:_dtLocal(ev.start),
+        end_time:ev.end?_dtLocal(ev.end):'',
+      }));
+      localStorage.setItem('icalEvents',JSON.stringify(plEvs));
+      plMergeAllICal(plEvs);
+      plRender();
+      alert('✅ '+plEvs.length+' événements importés depuis '+file.name);
+    }catch(err){alert('Erreur : '+err.message);}
+    input.value='';
+  };
+  reader.readAsText(file);
 }
 // ─── SYNC TOUT (Apple + Google) ──────────────────────────────────
 async function plSyncTout(){
