@@ -3246,10 +3246,10 @@ function saveAndSync() {
 //  AGENDA iCLOUD
 // ═══════════════════════════════════════════════════════
 const ICAL_URL = 'https://p162-caldav.icloud.com/published/2/MTk0ODc5NjI2MTk0ODc5NnLErrSuR1nX3uoLQpIJEHTYmKBdhdgOvjkZY92wZFVs_qcDCKgMzre89vTS2aO1bOeSGOdMzLakLf_vL8acxQk';
-// Proxies CORS testés et fonctionnels — corsproxy.io est prioritaire
+// Proxies CORS testés et fonctionnels — codetabs.com est le seul fiable
 const CORS_PROXIES = [
-  'https://corsproxy.io/?',
-  'https://corsproxy.io/?url=',
+  'https://api.codetabs.com/v1/proxy/?quest=',
+  'https://api.codetabs.com/v1/proxy/?quest=',
 ];
 let calEvents = [];
 let calViewDate = new Date();
@@ -3263,7 +3263,7 @@ async function syncCalendar(manual=false) {
   renderCalSyncBar();
   let lastErr='';
   for(let i=0;i<CORS_PROXIES.length;i++){
-    const proxyUrl = CORS_PROXIES[(calProxyIdx+i)%CORS_PROXIES.length] + encodeURIComponent(ICAL_URL);
+    const proxyUrl = CORS_PROXIES[(calProxyIdx+i)%CORS_PROXIES.length] + ICAL_URL;
     try {
       const res = await fetch(proxyUrl, {headers:{'X-Requested-With':'XMLHttpRequest'}});
       if(!res.ok) throw new Error('HTTP '+res.status);
@@ -4276,55 +4276,48 @@ async function _gcalExchange(code){
 
 async function gcalFetchEvents(){
   try{
-    const mon=plMon(plWKey);
-    const tMin=new Date(mon);tMin.setDate(mon.getDate()-1);
-    const tMax=new Date(mon);tMax.setDate(mon.getDate()+14);
-    const tMinS=encodeURIComponent(tMin.toISOString());
-    const tMaxS=encodeURIComponent(tMax.toISOString());
-    const params='?timeMin='+tMinS+'&timeMax='+tMaxS+'&singleEvents=true&orderBy=startTime&maxResults=500';
-    const headers={Authorization:'Bearer '+gcalAccessToken};
-    const allEvents=[];
-    // Étape 1 : tenter calendarList pour tous les calendriers
-    let calendars=[];
+    // Période large : 60 jours en arrière, 90 jours en avant
+    const now = new Date();
+    const tMin = new Date(now); tMin.setDate(now.getDate() - 60);
+    const tMax = new Date(now); tMax.setDate(now.getDate() + 90);
+    const tMinS = encodeURIComponent(tMin.toISOString());
+    const tMaxS = encodeURIComponent(tMax.toISOString());
+    const params = '?timeMin='+tMinS+'&timeMax='+tMaxS+'&singleEvents=true&orderBy=startTime&maxResults=2500';
+    const headers = {Authorization: 'Bearer '+gcalAccessToken};
+    const allEvents = [];
+    // Étape 1 : récupérer tous les calendriers
+    let calendars = [];
     try{
-      const clResp=await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList',{headers});
-      if(clResp.status===401){gcalAccessToken=null;localStorage.removeItem('gcalAccessToken');alert('Session expirée, reconnecte-toi.');return;}
-      if(clResp.ok){const clData=await clResp.json();calendars=(clData.items||[]);}
+      const clResp = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {headers});
+      if(clResp.status === 401){gcalAccessToken=null;localStorage.removeItem('gcalAccessToken');alert('Session GCal expirée — reconnectez-vous.');return;}
+      if(clResp.ok){const clData = await clResp.json(); calendars = (clData.items||[]);}
     }catch(e){console.warn('[GCal] calendarList error:',e);}
-    // Étape 2 : si aucun calendrier trouvé → fallback sur primary
-    if(!calendars.length) calendars=[{id:'primary',summary:'Principal'}];
+    if(!calendars.length) calendars = [{id:'primary', summary:'Principal'}];
     console.log('[GCal] '+calendars.length+' calendriers trouvés');
-    // Étape 3 : fetch events de chaque calendrier
+    // Étape 2 : fetch events de chaque calendrier
     await Promise.all(calendars.map(async cal=>{
       try{
-        const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(cal.id)+'/events'+params,{headers});
-        if(!r.ok){console.warn('[GCal] cal '+cal.id+' → HTTP '+r.status);return;}
-        const d=await r.json();
+        const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(cal.id)+'/events'+params, {headers});
+        if(!r.ok){console.warn('[GCal] cal '+cal.id+' → HTTP '+r.status); return;}
+        const d = await r.json();
         (d.items||[]).forEach(ev=>{
-          if(!ev.start)return;
+          if(!ev.start) return;
+          const startRaw = ev.start.dateTime || (ev.start.date+'T00:00:00');
+          const endRaw   = ev.end ? (ev.end.dateTime || (ev.end.date+'T00:00:00')) : startRaw;
           allEvents.push({
-            event_id:ev.id,
-            title:ev.summary||'Événement',
-            start_time:(ev.start.dateTime||ev.start.date+'T00:00:00').substring(0,19),
-            end_time:((ev.end&&(ev.end.dateTime||ev.end.date))||'').replace(/T.*/,'')||ev.start.date||'',
+            event_id:  ev.id,
+            title:     ev.summary || 'Événement',
+            start_time: startRaw.substring(0,19),
+            end_time:   endRaw.substring(0,19),
+            _cal:       cal.summary || cal.id
           });
         });
-      }catch(e){console.warn('[GCal] error cal '+cal.id,e);}
+      }catch(e){console.warn('[GCal] error cal '+cal.id, e);}
     }));
-    calEvents=allEvents;
-    localStorage.setItem('gcalEvents',JSON.stringify(calEvents));
-    // ─── DIAGNOSTIC ─────────────────────────────────────────────
-    try{
-      const meResp=await fetch('https://www.googleapis.com/oauth2/v1/userinfo',{headers});
-      const me=await meResp.json();
-      const calNames=calendars.map(c=>c.summary||c.id).join(', ');
-      const sample=calEvents.slice(0,4).map(e=>e.start_time.substring(0,10)+' '+e.title).join('\n')||'(aucun)';
-      const range=tMin.toISOString().substring(0,10)+' → '+tMax.toISOString().substring(0,10);
-      alert('📅 GCal Diagnostic\n\nCompte : '+(me.email||'?')+'\nCalendriers ('+calendars.length+'): '+calNames+'\nPériode : '+range+'\nÉvénements : '+calEvents.length+'\n\n'+sample);
-    }catch(de){alert('📅 GCal: '+calEvents.length+' événements ('+calendars.length+' calendriers)');}
-    // ────────────────────────────────────────────────────────────
-    console.log('[GCal] TOTAL: '+calEvents.length+' événements');
-  }catch(e){console.error('[GCal]',e);alert('Erreur GCal: '+e.message);}
+    calEvents = allEvents;
+    localStorage.setItem('gcalEvents', JSON.stringify(calEvents));
+    console.log('[GCal] TOTAL: '+calEvents.length+' événements sur '+calendars.length+' calendriers');
+  }catch(e){console.error('[GCal]',e); alert('Erreur GCal: '+e.message);}
 }
 
 async function plSyncGCal(){
@@ -4414,19 +4407,20 @@ function plMergeGCal(){
 // ─── ICAL FETCH HELPER ───────────────────────────────────────────
 async function _fetchICSText(url){
   const clean = url.replace(/^webcal:/, 'https:');
-  // corsproxy.io est le seul proxy fiable testé — on réessaie 2 fois
+  // codetabs.com : proxy fiable testé pour iCloud et Office 365
+  // Note : codetabs accepte l'URL brute (pas d'encodeURIComponent)
   const proxies = [
-    'https://corsproxy.io/?',
-    'https://corsproxy.io/?',
+    'https://api.codetabs.com/v1/proxy/?quest=',
+    'https://api.codetabs.com/v1/proxy/?quest=',
   ];
   for (let i = 0; i < proxies.length; i++) {
     try {
-      const fetchUrl = proxies[i] + encodeURIComponent(clean);
+      const fetchUrl = proxies[i] + clean;
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), 15000);
       const res = await fetch(fetchUrl, {
         signal: ctrl.signal,
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/calendar,*/*' }
+        headers: { 'Accept': 'text/calendar,*/*' }
       });
       clearTimeout(tid);
       if (!res.ok) throw new Error('HTTP ' + res.status);
