@@ -4257,7 +4257,7 @@ function plDisconnectGCal(){
   localStorage.removeItem('gcalTokenExpiry');
   localStorage.removeItem('gcalEvents');
   localStorage.removeItem('gcal_oauth_result');
-  sessionStorage.removeItem('gcal_v');
+  localStorage.removeItem('gcal_v');
   const btn=document.querySelector('.pl-btn[onclick*=plSyncGCal]');
   if(btn)btn.textContent='🔄 Sync GCal';
   alert('GCal déconnecté. Clique sur "🔄 Sync GCal" pour reconnecter.');
@@ -4268,7 +4268,7 @@ async function _gcalChallenge(v){const h=await crypto.subtle.digest('SHA-256',ne
 
 async function _gcalExchange(code){
   try{
-    const verifier=sessionStorage.getItem('gcal_v');
+    const verifier=localStorage.getItem('gcal_v');
     const r=await fetch('https://oauth2.googleapis.com/token',{
       method:'POST',
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
@@ -4283,7 +4283,7 @@ async function _gcalExchange(code){
     });
     const d=await r.json();
     if(d.access_token){
-      sessionStorage.removeItem('gcal_v');
+      localStorage.removeItem('gcal_v');
       // Stocker l'expiry (expires_in est en secondes, généralement 3600)
       const expiry = Date.now() + ((d.expires_in || 3600) - 60) * 1000; // -60s de marge
       localStorage.setItem('gcalTokenExpiry', expiry.toString());
@@ -4373,7 +4373,7 @@ async function plSyncGCal(){
   // Calculs PKCE (async, après ouverture popup)
   const verifier=_gcalVerifier();
   const challenge=await _gcalChallenge(verifier);
-  sessionStorage.setItem('gcal_v',verifier);
+  localStorage.setItem('gcal_v',verifier);
   const authUrl='https://accounts.google.com/o/oauth2/v2/auth?'+new URLSearchParams({
     client_id:GCAL_CLIENT_ID,
     redirect_uri:'https://marcpfr-creator.github.io/eastrategies-tout-en-un/',
@@ -4957,7 +4957,7 @@ function agClearGCalCache() {
   localStorage.removeItem('gcalTokenExpiry');
   localStorage.removeItem('gcalEvents');
   localStorage.removeItem('gcal_oauth_result');
-  sessionStorage.removeItem('gcal_v');
+  localStorage.removeItem('gcal_v');
   agSetStatus('gcal', 'idle', 'Non connecté');
   const btnC = document.getElementById('ag-btn-gcal-connect'); if (btnC) btnC.style.display = 'inline-block';
   const btnD = document.getElementById('ag-btn-gcal-disconnect'); if (btnD) btnD.style.display = 'none';
