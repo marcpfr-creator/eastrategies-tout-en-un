@@ -811,12 +811,18 @@ header { padding-top: max(16px, env(safe-area-inset-top)); }
 </style>
 <script>
 // ─── PKCE OAUTH CALLBACK (popup return handler) ──────────────────
+// Safari détruit window.opener après navigation cross-origin → on utilise localStorage
 (function(){
   try{
     var p=new URLSearchParams(window.location.search);
     var code=p.get('code'),state=p.get('state');
-    if(code&&state&&state.startsWith('gcal_')&&window.opener&&!window.opener.closed){
-      window.opener.postMessage({type:'gcal_oauth_code',code:code},window.location.origin);
+    if(code&&state&&state.startsWith('gcal_')){
+      // Méthode 1 : localStorage (fiable sur Safari)
+      localStorage.setItem('gcal_oauth_result',JSON.stringify({code:code,ts:Date.now()}));
+      // Méthode 2 : postMessage si opener disponible (Chrome/Firefox)
+      if(window.opener&&!window.opener.closed){
+        try{window.opener.postMessage({type:'gcal_oauth_code',code:code},window.location.origin);}catch(e){}
+      }
       window.close();
     }
   }catch(e){}
@@ -4204,11 +4210,13 @@ async function plSyncGCal(){
   });
   // Rediriger la popup déjà ouverte vers Google
   popup.location.href=authUrl;
-  const msgHandler=async function(evt){
-    if(evt.origin!==window.location.origin)return;
-    if(!evt.data||evt.data.type!=='gcal_oauth_code')return;
-    window.removeEventListener('message',msgHandler);
-    const tok=await _gcalExchange(evt.data.code);
+  // Gestionnaire commun (appelé par postMessage OU storage event)
+  let _gcalHandled=false;
+  const _gcalFinish=async function(code){
+    if(_gcalHandled)return; _gcalHandled=true;
+    window.removeEventListener('message',_msgH);
+    window.removeEventListener('storage',_storH);
+    const tok=await _gcalExchange(code);
     if(tok){
       gcalAccessToken=tok;
       localStorage.setItem('gcalAccessToken',tok);
@@ -4219,7 +4227,25 @@ async function plSyncGCal(){
       if(btn)btn.textContent='🔄 Sync GCal';
     }
   };
-  window.addEventListener('message',msgHandler);
+  // Méthode 1 : postMessage (Chrome/Firefox)
+  const _msgH=function(evt){
+    if(evt.origin!==window.location.origin)return;
+    if(!evt.data||evt.data.type!=='gcal_oauth_code')return;
+    _gcalFinish(evt.data.code);
+  };
+  // Méthode 2 : storage event (Safari — window.opener détruit après cross-origin)
+  const _storH=function(e){
+    if(e.key!=='gcal_oauth_result')return;
+    try{
+      const d=JSON.parse(e.newValue||'{}');
+      if(d.code&&(Date.now()-d.ts)<300000){
+        localStorage.removeItem('gcal_oauth_result');
+        _gcalFinish(d.code);
+      }
+    }catch{}
+  };
+  window.addEventListener('message',_msgH);
+  window.addEventListener('storage',_storH);
 }
 
 function plMergeGCal(){
