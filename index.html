@@ -4178,38 +4178,41 @@ async function gcalFetchEvents(){
     const tMax=new Date(mon);tMax.setDate(mon.getDate()+14);
     const tMinS=encodeURIComponent(tMin.toISOString());
     const tMaxS=encodeURIComponent(tMax.toISOString());
-    const params='?timeMin='+tMinS+'&timeMax='+tMaxS+'&singleEvents=true&orderBy=startTime&maxResults=200';
+    const params='?timeMin='+tMinS+'&timeMax='+tMaxS+'&singleEvents=true&orderBy=startTime&maxResults=500';
     const headers={Authorization:'Bearer '+gcalAccessToken};
-    // Récupérer tous les calendriers visibles
-    const clResp=await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList',{headers});
-    if(!clResp.ok){
-      if(clResp.status===401){gcalAccessToken=null;localStorage.removeItem('gcalAccessToken');alert('Session expirée, reconnecte-toi.');}
-      return;
-    }
-    const clData=await clResp.json();
-    const calendars=(clData.items||[]).filter(c=>c.selected!==false);
-    // Fetch events from all calendars in parallel
     const allEvents=[];
+    // Étape 1 : tenter calendarList pour tous les calendriers
+    let calendars=[];
+    try{
+      const clResp=await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList',{headers});
+      if(clResp.status===401){gcalAccessToken=null;localStorage.removeItem('gcalAccessToken');alert('Session expirée, reconnecte-toi.');return;}
+      if(clResp.ok){const clData=await clResp.json();calendars=(clData.items||[]);}
+    }catch(e){console.warn('[GCal] calendarList error:',e);}
+    // Étape 2 : si aucun calendrier trouvé → fallback sur primary
+    if(!calendars.length) calendars=[{id:'primary',summary:'Principal'}];
+    console.log('[GCal] '+calendars.length+' calendriers trouvés');
+    // Étape 3 : fetch events de chaque calendrier
     await Promise.all(calendars.map(async cal=>{
       try{
         const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(cal.id)+'/events'+params,{headers});
-        if(!r.ok)return;
+        if(!r.ok){console.warn('[GCal] cal '+cal.id+' → HTTP '+r.status);return;}
         const d=await r.json();
         (d.items||[]).forEach(ev=>{
+          if(!ev.start)return;
           allEvents.push({
             event_id:ev.id,
             title:ev.summary||'Événement',
             start_time:(ev.start.dateTime||ev.start.date+'T00:00:00').substring(0,19),
-            end_time:(ev.end.dateTime||ev.end.date+'T00:00:00').substring(0,19),
-            cal_name:cal.summary||'',
+            end_time:((ev.end&&(ev.end.dateTime||ev.end.date))||'').replace(/T.*/,'')||ev.start.date||'',
           });
         });
-      }catch(e){}
+      }catch(e){console.warn('[GCal] error cal '+cal.id,e);}
     }));
     calEvents=allEvents;
     localStorage.setItem('gcalEvents',JSON.stringify(calEvents));
-    console.log('[GCal] '+calEvents.length+' événements chargés depuis '+calendars.length+' calendriers');
-  }catch(e){console.error('[GCal]',e);}
+    console.log('[GCal] TOTAL: '+calEvents.length+' événements');
+    if(!calEvents.length) alert('⚠️ Google Calendar : 0 événements trouvés.\nVérifie que tu es connecté au bon compte Google (celui avec tes RDV).');
+  }catch(e){console.error('[GCal]',e);alert('Erreur GCal: '+e.message);}
 }
 
 async function plSyncGCal(){
