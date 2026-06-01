@@ -832,6 +832,25 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
   pointer-events: none; background: #f5f5f5;
 }
 
+
+/* ── VUE AGENDA JOURNALIÈRE DES TÂCHES ── */
+.tw-view-toggle { display:flex; gap:8px; margin-bottom:12px; }
+.tw-view-btn { padding:5px 14px; font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:700; letter-spacing:1px; border:1.5px solid #1a1a2e; background:#fff; cursor:pointer; }
+.tw-view-btn.active { background:#1a1a2e; color:#fff; }
+.tw-agenda-day { display:none; }
+.tw-agenda-day.active { display:block; }
+.tw-agenda-grid { position:relative; border-left:2px solid #e0e0e0; margin-left:48px; }
+.tw-agenda-hour { position:relative; height:56px; border-bottom:1px solid #f0f0f0; }
+.tw-agenda-hour-label { position:absolute; left:-52px; top:-8px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#999; width:44px; text-align:right; }
+.tw-agenda-task-block { position:absolute; left:8px; right:8px; background:#1a1a2e; color:#fff; border-radius:3px; padding:3px 8px; font-size:11px; font-family:'IBM Plex Mono',monospace; cursor:pointer; z-index:2; min-height:22px; display:flex; align-items:center; gap:6px; }
+.tw-agenda-task-block.prio-high { background:#c62828; }
+.tw-agenda-task-block.prio-med  { background:#e65100; }
+.tw-agenda-task-block.prio-low  { background:#2e7d32; }
+.tw-agenda-task-block.done-block { opacity:0.4; text-decoration:line-through; }
+.tw-agenda-now-line { position:absolute; left:0; right:0; height:2px; background:#ff1744; z-index:3; }
+.tw-agenda-now-line::before { content:''; position:absolute; left:-5px; top:-4px; width:10px; height:10px; background:#ff1744; border-radius:50%; }
+.tw-agenda-no-time { background:#f5f5f5; border:1px dashed #ccc; border-radius:3px; padding:4px 10px; margin:4px 0; font-size:11px; font-family:'IBM Plex Mono',monospace; display:flex; align-items:center; gap:8px; }
+
 </style>
 <script>
 // ─── PKCE OAUTH CALLBACK (popup return handler) ──────────────────
@@ -3640,6 +3659,10 @@ function renderAgenda(){
     <div class="tw-qa-label">Date due</div>
     <input class="tw-qa-input" id="tw-newdue" type="date">
   </div>
+  <div class="tw-qa-field" style="max-width:110px;">
+    <div class="tw-qa-label">Heure</div>
+    <input class="tw-qa-input" id="tw-newtime" type="time" placeholder="09:00">
+  </div>
   <button class="btn btn-primary" onclick="twQuickAdd()">✚ Ajouter</button>
 </div>
 
@@ -3652,8 +3675,23 @@ function renderAgenda(){
 <!-- Vue semaine (strip 7 jours) -->
 <div class="tw-weekly-strip" id="tw-weekly-strip"></div>
 
+<!-- Basculement de vue -->
+<div class="tw-view-toggle">
+  <button class="tw-view-btn active" id="tw-btn-kanban" onclick="twSetView('kanban')">📋 Kanban</button>
+  <button class="tw-view-btn" id="tw-btn-agenda" onclick="twSetView('agenda')">🕐 Agenda du jour</button>
+</div>
+
+<!-- Vue agenda journalière -->
+<div id="tw-agenda-day" class="tw-agenda-day">
+  <div id="tw-agenda-grid-wrap"></div>
+  <div style="margin-top:12px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;letter-spacing:1px;color:#666;margin-bottom:6px;">SANS HEURE DÉFINIE</div>
+    <div id="tw-agenda-notime"></div>
+  </div>
+</div>
+
 <!-- Kanban board -->
-<div class="tw-board">
+<div class="tw-board" id="tw-kanban-board">
   <div class="tw-col">
     <div class="tw-col-header" style="background:#ffebee;color:#c62828;border-bottom:2px solid #c62828;">
       🔴 URGENT <span class="tw-count" id="tw-count-high">0</span>
@@ -3675,7 +3713,7 @@ function renderAgenda(){
     <div class="tw-col-body" id="tw-col-low"></div>
     <div class="tw-add-area"><input class="tw-add-input" placeholder="+ Tâche future..." onkeydown="if(event.key==='Enter')twAddInline('low',this)"></div>
   </div>
-</div>
+</div><!-- fin tw-kanban-board -->
 
 </div>
 
@@ -5803,11 +5841,13 @@ function twQuickAdd() {
     prio: document.getElementById('tw-newprio').value || 'med',
     source: document.getElementById('tw-newsrc').value || '',
     due: document.getElementById('tw-newdue').value || '',
+    time: document.getElementById('tw-newtime').value || '',
     done: false,
     created: new Date().toISOString().split('T')[0],
   });
   document.getElementById('tw-newtask').value = '';
   document.getElementById('tw-newdue').value = '';
+  document.getElementById('tw-newtime').value = '';
   twRender();
 }
 
@@ -5834,6 +5874,7 @@ function twCard(t) {
   const prioLabel = { high:'Urgent', med:'Semaine', low:'Plus tard' };
   const srcLabel = t.source ? ' · ' + t.source : '';
   const dueLabel = t.due ? ' · 📅 ' + t.due.split('-').reverse().join('/') : '';
+  const timeLabel = t.time ? ' · 🕐 ' + t.time : '';
   return '<div class="tw-card'+(t.done?' done-card':'')+'" id="tw-'+t.id+'">' +
     '<div class="tw-card-top">' +
       '<div class="tw-card-chk'+(t.done?' done':'')+'" onclick="twToggle(\''+t.id+'\')">'+(t.done?'✓':'')+'</div>' +
@@ -5843,7 +5884,7 @@ function twCard(t) {
     '<div class="tw-card-meta">' +
       '<span class="tw-tag tw-tag-'+tagMap[t.prio]+'">'+prioLabel[t.prio]+'</span>' +
       (t.source ? '<span class="tw-tag tw-tag-'+tagMap[t.source]+' ">'+t.source+'</span>' : '') +
-      dueLabel +
+      dueLabel + timeLabel +
     '</div>' +
   '</div>';
 }
@@ -5918,13 +5959,106 @@ function twRender() {
   const cols = { high: document.getElementById('tw-col-high'), med: document.getElementById('tw-col-med'), low: document.getElementById('tw-col-low') };
   if (!cols.high) return;
   ['high','med','low'].forEach(p => {
-    const tasks = twTasks.filter(t => t.prio === p);
+    const tasks = twTasks.filter(t => t.prio === p).sort((a,b) => {
+      if (!a.time && !b.time) return 0;
+      if (!a.time) return 1;
+      if (!b.time) return -1;
+      return a.time.localeCompare(b.time);
+    });
     cols[p].innerHTML = tasks.map(twCard).join('');
     const cnt = document.getElementById('tw-count-'+p);
     if (cnt) cnt.textContent = tasks.filter(t=>!t.done).length;
   });
   twRenderOverdue();
   twRenderWeekStrip();
+  if (twCurrentView === 'agenda') twRenderAgenda();
+}
+
+
+// ── VUE AGENDA JOURNALIÈRE ──
+let twCurrentView = 'kanban';
+
+function twSetView(view) {
+  twCurrentView = view;
+  const kanban = document.getElementById('tw-kanban-board');
+  const agenda = document.getElementById('tw-agenda-day');
+  const btnK = document.getElementById('tw-btn-kanban');
+  const btnA = document.getElementById('tw-btn-agenda');
+  if (view === 'agenda') {
+    if (kanban) kanban.style.display = 'none';
+    if (agenda) { agenda.style.display = 'block'; agenda.classList.add('active'); }
+    if (btnK) btnK.classList.remove('active');
+    if (btnA) btnA.classList.add('active');
+    twRenderAgenda();
+  } else {
+    if (kanban) kanban.style.display = '';
+    if (agenda) { agenda.style.display = 'none'; agenda.classList.remove('active'); }
+    if (btnK) btnK.classList.add('active');
+    if (btnA) btnA.classList.remove('active');
+  }
+}
+
+function twRenderAgenda() {
+  const wrap = document.getElementById('tw-agenda-grid-wrap');
+  const notime = document.getElementById('tw-agenda-notime');
+  if (!wrap) return;
+
+  const today = new Date().toISOString().split('T')[0];
+  const todayTasks = twTasks.filter(t => !t.done && (t.due === today || (!t.due && t.time)));
+  const allTasks = twTasks.filter(t => !t.done);
+
+  // Tâches avec heure
+  const timedTasks = allTasks.filter(t => t.time);
+  // Tâches sans heure
+  const untimedTasks = allTasks.filter(t => !t.time);
+
+  // Grille de 7h à 21h
+  const startH = 7, endH = 21;
+  let gridHtml = '<div class="tw-agenda-grid" id="tw-agenda-grid">';
+
+  for (let h = startH; h <= endH; h++) {
+    gridHtml += `<div class="tw-agenda-hour" id="tw-ah-${h}">`;
+    gridHtml += `<span class="tw-agenda-hour-label">${String(h).padStart(2,'0')}:00</span>`;
+    gridHtml += '</div>';
+  }
+
+  // Ligne "maintenant"
+  const now = new Date();
+  const nowH = now.getHours() + now.getMinutes() / 60;
+  if (nowH >= startH && nowH <= endH) {
+    const pct = ((nowH - startH) / (endH - startH)) * 100;
+    gridHtml += `<div class="tw-agenda-now-line" style="top:${pct}%"></div>`;
+  }
+
+  gridHtml += '</div>';
+  wrap.innerHTML = gridHtml;
+
+  // Positionner les tâches avec heure
+  timedTasks.forEach(t => {
+    const [hh, mm] = t.time.split(':').map(Number);
+    if (hh < startH || hh > endH) return;
+    const hourEl = document.getElementById('tw-ah-' + hh);
+    if (!hourEl) return;
+    const top = (mm / 60) * 56; // 56px par heure
+    const block = document.createElement('div');
+    block.className = `tw-agenda-task-block prio-${t.prio}${t.done?' done-block':''}`;
+    block.style.top = top + 'px';
+    block.innerHTML = `<span style="font-size:9px;opacity:0.8">${t.time}</span> ${t.text}`;
+    block.onclick = () => twToggle(t.id);
+    hourEl.appendChild(block);
+  });
+
+  // Tâches sans heure
+  notime.innerHTML = untimedTasks.length
+    ? untimedTasks.map(t =>
+        `<div class="tw-agenda-no-time">
+          <div class="tw-card-chk${t.done?' done':''}" onclick="twToggle('${t.id}');twRenderAgenda()" style="width:16px;height:16px;border:1.5px solid #999;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px">${t.done?'✓':''}</div>
+          <span class="tw-tag tw-tag-${t.prio==='high'?'rouge':t.prio==='med'?'orange':'vert'}" style="font-size:9px">${t.prio==='high'?'Urgent':t.prio==='med'?'Semaine':'Plus tard'}</span>
+          ${t.text}
+          <button onclick="twDelete('${t.id}')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#999;font-size:11px">✕</button>
+        </div>`
+      ).join('')
+    : '<div style="color:#999;font-size:11px;font-family:IBM Plex Mono,monospace">Aucune tâche sans heure</div>';
 }
 
 function twLog(msg) {
