@@ -4424,15 +4424,37 @@ async function gcalFetchEvents(){
         const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(cal.id)+'/events'+params, {headers});
         if(!r.ok){console.warn('[GCal] cal '+cal.id+' → HTTP '+r.status); return;}
         const d = await r.json();
+        // Helper : convertit une date ISO (UTC ou avec offset) en "YYYY-MM-DDTHH:MM" heure Paris
+        const toParisLocal = (isoStr) => {
+          const dt = new Date(isoStr);
+          if(isNaN(dt)) return isoStr.substring(0,16);
+          // Extraire les composantes en heure Europe/Paris
+          const fmt = new Intl.DateTimeFormat('fr-FR', {
+            timeZone: 'Europe/Paris',
+            year:'numeric', month:'2-digit', day:'2-digit',
+            hour:'2-digit', minute:'2-digit', hour12:false
+          });
+          const parts = fmt.formatToParts(dt);
+          const p = {}; parts.forEach(x=>{ p[x.type]=x.value; });
+          // Gérer le cas "24" retourné par certains navigateurs pour minuit
+          const hh = p.hour==='24'?'00':p.hour;
+          return `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}`;
+        };
         (d.items||[]).forEach(ev=>{
           if(!ev.start) return;
+          // Événements sur toute la journée : start.date sans heure
+          const isAllDay = !ev.start.dateTime;
           const startRaw = ev.start.dateTime || (ev.start.date+'T00:00:00');
           const endRaw   = ev.end ? (ev.end.dateTime || (ev.end.date+'T00:00:00')) : startRaw;
+          // Convertir en heure locale Paris (sauf événements toute la journée)
+          const startLocal = isAllDay ? ev.start.date+'T00:00' : toParisLocal(startRaw);
+          const endLocal   = isAllDay ? (ev.end ? ev.end.date+'T00:00' : startLocal) : toParisLocal(endRaw);
           allEvents.push({
             event_id:  ev.id,
             title:     ev.summary || 'Événement',
-            start_time: startRaw.substring(0,19),
-            end_time:   endRaw.substring(0,19),
+            start_time: startLocal,
+            end_time:   endLocal,
+            all_day:    isAllDay,
             _cal:       cal.summary || cal.id
           });
         });
