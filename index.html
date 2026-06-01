@@ -4182,7 +4182,12 @@ async function plSyncGCal(){
     if(btn)btn.textContent='✅ GCal connecté';
     return;
   }
-  // Sinon → PKCE OAuth popup (synchrone depuis gesture utilisateur)
+  // Safari exige que window.open() soit SYNCHRONE dans le même tick que le clic.
+  // On ouvre d'abord about:blank, puis on redirige après les calculs async.
+  const popup=window.open('about:blank','gcal_auth','width=520,height=620');
+  if(!popup){alert('Popup bloquée — autorisez les popups pour ce site dans Safari : Préférences > Sites web > Fenêtres surgissantes.');return;}
+  if(btn)btn.textContent='🔄 Connexion…';
+  // Calculs PKCE (async, après ouverture popup)
   const verifier=_gcalVerifier();
   const challenge=await _gcalChallenge(verifier);
   sessionStorage.setItem('gcal_v',verifier);
@@ -4197,9 +4202,8 @@ async function plSyncGCal(){
     access_type:'online',
     prompt:'consent'
   });
-  const popup=window.open(authUrl,'gcal_auth','width=520,height=620');
-  if(!popup){alert('Popup bloquée — autorisez les popups pour ce site.');return;}
-  if(btn)btn.textContent='🔄 Connexion…';
+  // Rediriger la popup déjà ouverte vers Google
+  popup.location.href=authUrl;
   const msgHandler=async function(evt){
     if(evt.origin!==window.location.origin)return;
     if(!evt.data||evt.data.type!=='gcal_oauth_code')return;
