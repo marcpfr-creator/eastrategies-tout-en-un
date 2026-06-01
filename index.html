@@ -3678,8 +3678,12 @@ function renderAgenda(){
 <!-- Basculement de vue -->
 <div class="tw-view-toggle">
   <button class="tw-view-btn active" id="tw-btn-kanban" onclick="twSetView('kanban')">📋 Kanban</button>
-  <button class="tw-view-btn" id="tw-btn-agenda" onclick="twSetView('agenda')">🕐 Agenda du jour</button>
+  <button class="tw-view-btn" id="tw-btn-liste" onclick="twSetView('liste')">🕐 Liste par heure</button>
+  <button class="tw-view-btn" id="tw-btn-agenda" onclick="twSetView('agenda')">📅 Agenda du jour</button>
 </div>
+
+<!-- Vue liste triée par heure -->
+<div id="tw-liste-view" style="display:none;"></div>
 
 <!-- Vue agenda journalière -->
 <div id="tw-agenda-day" class="tw-agenda-day">
@@ -5972,6 +5976,7 @@ function twRender() {
   twRenderOverdue();
   twRenderWeekStrip();
   if (twCurrentView === 'agenda') twRenderAgenda();
+  if (twCurrentView === 'liste') twRenderListe();
 }
 
 
@@ -5980,22 +5985,67 @@ let twCurrentView = 'kanban';
 
 function twSetView(view) {
   twCurrentView = view;
-  const kanban = document.getElementById('tw-kanban-board');
-  const agenda = document.getElementById('tw-agenda-day');
-  const btnK = document.getElementById('tw-btn-kanban');
-  const btnA = document.getElementById('tw-btn-agenda');
-  if (view === 'agenda') {
-    if (kanban) kanban.style.display = 'none';
+  const kanban  = document.getElementById('tw-kanban-board');
+  const agenda  = document.getElementById('tw-agenda-day');
+  const liste   = document.getElementById('tw-liste-view');
+  const btnK    = document.getElementById('tw-btn-kanban');
+  const btnA    = document.getElementById('tw-btn-agenda');
+  const btnL    = document.getElementById('tw-btn-liste');
+  // Tout masquer
+  if (kanban) kanban.style.display = 'none';
+  if (agenda) { agenda.style.display = 'none'; agenda.classList.remove('active'); }
+  if (liste)  liste.style.display = 'none';
+  [btnK, btnA, btnL].forEach(b => b && b.classList.remove('active'));
+  if (view === 'kanban') {
+    if (kanban) kanban.style.display = '';
+    if (btnK) btnK.classList.add('active');
+  } else if (view === 'liste') {
+    if (liste) liste.style.display = 'block';
+    if (btnL) btnL.classList.add('active');
+    twRenderListe();
+  } else if (view === 'agenda') {
     if (agenda) { agenda.style.display = 'block'; agenda.classList.add('active'); }
-    if (btnK) btnK.classList.remove('active');
     if (btnA) btnA.classList.add('active');
     twRenderAgenda();
-  } else {
-    if (kanban) kanban.style.display = '';
-    if (agenda) { agenda.style.display = 'none'; agenda.classList.remove('active'); }
-    if (btnK) btnK.classList.add('active');
-    if (btnA) btnA.classList.remove('active');
   }
+}
+
+function twRenderListe() {
+  const el = document.getElementById('tw-liste-view');
+  if (!el) return;
+  const prioLabel = { high:'🔴 Urgent', med:'🟠 Semaine', low:'🟢 Plus tard' };
+  const prioColor = { high:'#c62828', med:'#e65100', low:'#2e7d32' };
+
+  // Trier toutes les tâches non terminées par heure (sans heure → fin de liste)
+  const sorted = [...twTasks].sort((a, b) => {
+    if (!a.time && !b.time) return 0;
+    if (!a.time) return 1;
+    if (!b.time) return -1;
+    return a.time.localeCompare(b.time);
+  });
+
+  if (!sorted.length) {
+    el.innerHTML = '<div style="color:#999;font-family:IBM Plex Mono,monospace;font-size:12px;padding:20px">Aucune tâche</div>';
+    return;
+  }
+
+  let html = '<div style="display:flex;flex-direction:column;gap:6px;max-width:700px;">';
+  sorted.forEach(t => {
+    const bg = t.done ? '#f5f5f5' : '#fff';
+    const border = prioColor[t.prio] || '#ccc';
+    const timeStr = t.time ? `<span style="font-family:IBM Plex Mono,monospace;font-size:11px;font-weight:700;color:${border};min-width:44px">${t.time}</span>` : '<span style="font-family:IBM Plex Mono,monospace;font-size:11px;color:#bbb;min-width:44px">--:--</span>';
+    const dueStr = t.due ? `<span style="font-size:10px;color:#888;font-family:IBM Plex Mono,monospace">📅 ${t.due.split('-').reverse().join('/')}</span>` : '';
+    html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${bg};border-left:3px solid ${border};border:1px solid #e0e0e0;border-left:3px solid ${border};opacity:${t.done?0.5:1}">
+      <div onclick="twToggle('${t.id}');twRenderListe()" style="width:18px;height:18px;border:1.5px solid ${border};display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;flex-shrink:0">${t.done?'✓':''}</div>
+      ${timeStr}
+      <span style="font-size:11px;font-family:IBM Plex Mono,monospace;padding:1px 6px;background:${border};color:#fff">${prioLabel[t.prio]||t.prio}</span>
+      <span style="flex:1;font-size:13px;${t.done?'text-decoration:line-through;':''}">${t.text}</span>
+      ${dueStr}
+      <button onclick="twDelete('${t.id}')" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:12px;flex-shrink:0">✕</button>
+    </div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
 }
 
 function twRenderAgenda() {
