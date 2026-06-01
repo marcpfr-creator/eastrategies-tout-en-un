@@ -5785,7 +5785,7 @@ function twLoad() {
 
 function twSave() {
   localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
-  sbPush('tw_tasks', twTasks);
+  if (!sbInitialLoading) sbPush('tw_tasks', twTasks);
   showToast('💾 Tâches sauvegardées');
 }
 
@@ -6237,7 +6237,7 @@ function tpLoad() {
 }
 function tpSave() {
   localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
-  sbPush('tp_entries', tpEntries);
+  if (!sbInitialLoading) sbPush('tp_entries', tpEntries);
   showToast('💾 Temps sauvegardé');
 }
 function tpNextId() {
