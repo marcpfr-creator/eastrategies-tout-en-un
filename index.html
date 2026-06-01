@@ -814,12 +814,25 @@ header { padding-top: max(16px, env(safe-area-inset-top)); }
 // Safari détruit window.opener après navigation cross-origin → on utilise localStorage
 (function(){
   try{
+    // Mode Implicit : token dans le fragment #access_token=...
+    var hash=new URLSearchParams(window.location.hash.replace('#',''));
+    var token=hash.get('access_token'),state=hash.get('state'),expiresIn=hash.get('expires_in');
+    if(token&&state&&state.startsWith('gcal_')){
+      var expiry=Date.now()+((parseInt(expiresIn)||3600)-60)*1000;
+      localStorage.setItem('gcalAccessToken',token);
+      localStorage.setItem('gcalTokenExpiry',expiry.toString());
+      localStorage.setItem('gcal_oauth_result',JSON.stringify({token:token,expiry:expiry,ts:Date.now()}));
+      if(window.opener&&!window.opener.closed){
+        try{window.opener.postMessage({type:'gcal_oauth_token',token:token,expiry:expiry},window.location.origin);}catch(e){}
+      }
+      window.close();
+      return;
+    }
+    // Mode Authorization Code (legacy) : code dans ?code=
     var p=new URLSearchParams(window.location.search);
-    var code=p.get('code'),state=p.get('state');
-    if(code&&state&&state.startsWith('gcal_')){
-      // Méthode 1 : localStorage (fiable sur Safari)
+    var code=p.get('code'),state2=p.get('state');
+    if(code&&state2&&state2.startsWith('gcal_')){
       localStorage.setItem('gcal_oauth_result',JSON.stringify({code:code,ts:Date.now()}));
-      // Méthode 2 : postMessage si opener disponible (Chrome/Firefox)
       if(window.opener&&!window.opener.closed){
         try{window.opener.postMessage({type:'gcal_oauth_code',code:code},window.location.origin);}catch(e){}
       }
@@ -4370,79 +4383,74 @@ async function plSyncGCal(){
   const popup=window.open('about:blank','gcal_auth','width=520,height=620');
   if(!popup){alert('Popup bloquée — autorisez les popups pour ce site dans Safari : Préférences > Sites web > Fenêtres surgissantes.');return;}
   if(btn)btn.textContent='🔄 Connexion…';
-  // Calculs PKCE (async, après ouverture popup)
-  const verifier=_gcalVerifier();
-  const challenge=await _gcalChallenge(verifier);
-  localStorage.setItem('gcal_v',verifier);
+  // Mode Implicit : pas besoin de PKCE
   const authUrl='https://accounts.google.com/o/oauth2/v2/auth?'+new URLSearchParams({
     client_id:GCAL_CLIENT_ID,
     redirect_uri:'https://marcpfr-creator.github.io/eastrategies-tout-en-un/',
-    response_type:'code',
+    response_type:'token',
     scope:GCAL_SCOPE,
-    code_challenge:challenge,
-    code_challenge_method:'S256',
     state:'gcal_'+Date.now(),
-    access_type:'online',
     prompt:'consent'
   });
   // Rediriger la popup déjà ouverte vers Google
   popup.location.href=authUrl;
   // Gestionnaire commun (appelé par postMessage OU storage event)
   let _gcalHandled=false;
+  const _gcalApplyToken=async function(tok){
+    gcalAccessToken=tok;
+    localStorage.setItem('gcalAccessToken',tok);
+    await gcalFetchEvents();
+    plMergeGCal();plRender();
+    if(btn)btn.textContent='✅ GCal connecté';
+    agSetStatus('gcal','ok','Connecté');
+    const btnC=document.getElementById('ag-btn-gcal-connect');if(btnC)btnC.style.display='none';
+    const btnD=document.getElementById('ag-btn-gcal-disconnect');if(btnD)btnD.style.display='inline-block';
+  };
   const _gcalFinish=async function(code){
     if(_gcalHandled)return; _gcalHandled=true;
     window.removeEventListener('message',_msgH);
     window.removeEventListener('storage',_storH);
     const tok=await _gcalExchange(code);
-    if(tok){
-      gcalAccessToken=tok;
-      localStorage.setItem('gcalAccessToken',tok);
-      await gcalFetchEvents();
-      plMergeGCal();plRender();
-      if(btn)btn.textContent='✅ GCal connecté';
-    }else{
-      if(btn)btn.textContent='🔄 Sync GCal';
-    }
+    if(tok){ await _gcalApplyToken(tok); }
+    else{ if(btn)btn.textContent='🔄 Sync GCal'; }
   };
-  // Méthode 1 : postMessage (Chrome/Firefox)
+  const _gcalFinishToken=async function(tok){
+    if(_gcalHandled)return; _gcalHandled=true;
+    window.removeEventListener('message',_msgH);
+    window.removeEventListener('storage',_storH);
+    await _gcalApplyToken(tok);
+  };
+  // Méthode 1 : postMessage (Chrome/Firefox) — token direct ou code
   const _msgH=function(evt){
     if(evt.origin!==window.location.origin)return;
-    if(!evt.data||evt.data.type!=='gcal_oauth_code')return;
-    _gcalFinish(evt.data.code);
+    if(!evt.data)return;
+    if(evt.data.type==='gcal_oauth_token'&&evt.data.token){ _gcalFinishToken(evt.data.token); return; }
+    if(evt.data.type==='gcal_oauth_code'&&evt.data.code){ _gcalFinish(evt.data.code); return; }
   };
   // Méthode 2 : storage event (Safari)
   const _storH=function(e){
     if(e.key!=='gcal_oauth_result')return;
     try{
       const d=JSON.parse(e.newValue||'{}');
-      if(d.code&&(Date.now()-d.ts)<300000){
-        localStorage.removeItem('gcal_oauth_result');
-        _gcalFinish(d.code);
-      }
+      if(d.token&&(Date.now()-d.ts)<300000){ localStorage.removeItem('gcal_oauth_result'); _gcalFinishToken(d.token); return; }
+      if(d.code&&(Date.now()-d.ts)<300000){ localStorage.removeItem('gcal_oauth_result'); _gcalFinish(d.code); return; }
     }catch{}
   };
-  // Méthode 3 : polling actif (le plus fiable — fonctionne sur tous les navigateurs)
+  // Méthode 3 : polling actif toutes les 500ms
   let _pollCount=0;
   const _poll=setInterval(function(){
     _pollCount++;
-    if(_pollCount>120){clearInterval(_poll);return;} // timeout 60s
+    if(_pollCount>120){clearInterval(_poll);if(btn&&!_gcalHandled)btn.textContent='🔄 Sync GCal';return;}
     try{
       const raw=localStorage.getItem('gcal_oauth_result');
       if(!raw)return;
       const d=JSON.parse(raw);
-      if(d.code&&(Date.now()-d.ts)<300000){
-        clearInterval(_poll);
-        localStorage.removeItem('gcal_oauth_result');
-        _gcalFinish(d.code);
-      }
+      clearInterval(_poll);
+      localStorage.removeItem('gcal_oauth_result');
+      if(d.token&&(Date.now()-d.ts)<300000){ _gcalFinishToken(d.token); return; }
+      if(d.code&&(Date.now()-d.ts)<300000){ _gcalFinish(d.code); return; }
     }catch{}
-    // Aussi vérifier si la popup est fermée avec un code dans l'URL (cas rare)
-    try{
-      if(popup&&popup.closed&&!_gcalHandled){
-        clearInterval(_poll);
-        if(btn)btn.textContent='🔄 Sync GCal';
-      }
-    }catch{}
+    try{ if(popup&&popup.closed&&!_gcalHandled){ clearInterval(_poll); if(btn)btn.textContent='🔄 Sync GCal'; } }catch{}
   },500);
   window.addEventListener('message',_msgH);
   window.addEventListener('storage',_storH);
