@@ -5018,6 +5018,82 @@ window.addEventListener('load', function() {
   }
 });
 
+
+// ═══════════════════════════════════════════════════════
+//  NOTIFICATIONS AGENDA — 15 min avant chaque événement
+// ═══════════════════════════════════════════════════════
+
+const NOTIF_ADVANCE_MS = 15 * 60 * 1000; // 15 minutes
+let _notifTimers = [];
+let _notifFired = new Set(); // éviter les doublons
+
+function plNotifInit() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function plNotifSchedule() {
+  // Annuler les anciens timers
+  _notifTimers.forEach(t => clearTimeout(t));
+  _notifTimers = [];
+
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const now = Date.now();
+  const horizon = now + 24 * 60 * 60 * 1000; // 24h à l'avance max
+
+  // Collecter tous les événements des 3 sources
+  const allEvs = [];
+  try { const s = localStorage.getItem('icalEvents'); if (s) allEvs.push(...JSON.parse(s)); } catch {}
+  try { const s = localStorage.getItem('o365Events'); if (s) allEvs.push(...JSON.parse(s)); } catch {}
+  try { const s = localStorage.getItem('gcalEvents'); if (s) allEvs.push(...JSON.parse(s)); } catch {}
+
+  let scheduled = 0;
+  allEvs.forEach(ev => {
+    if (!ev.start_time) return;
+    const evStart = new Date(ev.start_time).getTime();
+    if (isNaN(evStart)) return;
+    const fireAt = evStart - NOTIF_ADVANCE_MS;
+    const key = ev.title + '_' + evStart;
+    if (fireAt <= now || fireAt > horizon) return; // passé ou trop loin
+    if (_notifFired.has(key)) return; // déjà notifié
+
+    const delay = fireAt - now;
+    const t = setTimeout(() => {
+      if (_notifFired.has(key)) return;
+      _notifFired.add(key);
+      const startStr = new Date(evStart).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+      const n = new Notification('📅 ' + (ev.title || 'Événement'), {
+        body: 'Dans 15 min — ' + startStr + (ev.location ? '\n📍 ' + ev.location : ''),
+        icon: 'https://www.eastrategies.fr/wp-content/uploads/2022/08/logo.png',
+        tag: key,
+        requireInteraction: false
+      });
+      n.onclick = () => { window.focus(); n.close(); };
+    }, delay);
+    _notifTimers.push(t);
+    scheduled++;
+  });
+
+  if (scheduled > 0) console.log('[Notif] ' + scheduled + ' notification(s) programmée(s) dans les 24h');
+}
+
+// Reprogrammer après chaque sync
+const _origPlSyncTout = plSyncTout;
+plSyncTout = async function() {
+  await _origPlSyncTout.apply(this, arguments);
+  plNotifSchedule();
+};
+
+// Init au chargement
+window.addEventListener('load', function() {
+  plNotifInit();
+  // Reprogrammer toutes les heures
+  setInterval(plNotifSchedule, 60 * 60 * 1000);
+});
+
 // ═══════════════════════════════════════════════════════
 //  OBSIDIAN INTEGRATION
 // ═══════════════════════════════════════════════════════
