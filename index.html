@@ -3246,12 +3246,10 @@ function saveAndSync() {
 //  AGENDA iCLOUD
 // ═══════════════════════════════════════════════════════
 const ICAL_URL = 'https://p162-caldav.icloud.com/published/2/MTk0ODc5NjI2MTk0ODc5NnLErrSuR1nX3uoLQpIJEHTYmKBdhdgOvjkZY92wZFVs_qcDCKgMzre89vTS2aO1bOeSGOdMzLakLf_vL8acxQk';
+// Proxies CORS testés et fonctionnels — corsproxy.io est prioritaire
 const CORS_PROXIES = [
-  '',
   'https://corsproxy.io/?',
-  'https://api.allorigins.win/raw?url=',
-  'https://cors-anywhere.herokuapp.com/',
-  'https://thingproxy.freeboard.io/fetch/'
+  'https://corsproxy.io/?url=',
 ];
 let calEvents = [];
 let calViewDate = new Date();
@@ -3907,6 +3905,113 @@ function renderAgenda(){
 </div>
 <!-- ══ FIN SECTION TEMPS PASSÉ ══ -->
 
+<!-- ═══════ MODAL CONFIG AGENDAS ═══════ -->
+<style>
+/* ── MODAL AGENDAS ── */
+.ag-cfg-bd{display:none;position:fixed;inset:0;background:rgba(15,14,12,.85);backdrop-filter:blur(6px);z-index:700;align-items:center;justify-content:center;padding:16px;}
+.ag-cfg-bd.open{display:flex;}
+.ag-cfg-modal{background:var(--card);border:2px solid var(--ink);box-shadow:6px 6px 0 #0f0e0c;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;font-family:'IBM Plex Mono',monospace;}
+.ag-cfg-head{background:var(--ink);color:var(--bg);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;}
+.ag-cfg-head h3{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;}
+.ag-cfg-close{background:none;border:none;color:var(--bg);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;}
+.ag-cfg-body{padding:20px;display:flex;flex-direction:column;gap:18px;}
+.ag-cfg-source{border:1.5px solid var(--border);padding:14px 16px;}
+.ag-cfg-source-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.ag-cfg-source-icon{font-size:20px;}
+.ag-cfg-source-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;}
+.ag-cfg-status{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.5px;margin-left:auto;}
+.ag-cfg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.ag-cfg-dot.ok{background:var(--green);}
+.ag-cfg-dot.err{background:var(--red);}
+.ag-cfg-dot.idle{background:var(--muted);}
+.ag-cfg-dot.loading{background:var(--orange);animation:syncPulse .8s infinite;}
+.ag-cfg-input{width:100%;font-family:'IBM Plex Mono',monospace;font-size:11px;border:1.5px solid var(--border);background:var(--bg);padding:8px 10px;color:var(--ink);outline:none;margin-top:6px;box-sizing:border-box;}
+.ag-cfg-input:focus{border-color:var(--ink);}
+.ag-cfg-hint{font-size:10px;color:var(--muted);line-height:1.6;margin-top:5px;}
+.ag-cfg-hint a{color:var(--blue);}
+.ag-cfg-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.ag-cfg-btn{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:6px 12px;cursor:pointer;border:1.5px solid;transition:all .15s;}
+.ag-cfg-btn-primary{background:var(--accent);border-color:var(--accent);color:#000;box-shadow:2px 2px 0 #000;}
+.ag-cfg-btn-primary:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 #000;}
+.ag-cfg-btn-outline{background:transparent;border-color:var(--border);color:var(--muted);}
+.ag-cfg-btn-outline:hover{border-color:var(--ink);color:var(--ink);}
+.ag-cfg-btn-danger{background:transparent;border-color:#ff6666;color:#ff6666;}
+.ag-cfg-btn-danger:hover{background:#ff6666;color:#fff;}
+.ag-cfg-footer{padding:14px 20px;border-top:1.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+.ag-cfg-footer-note{font-size:10px;color:var(--muted);}
+</style>
+
+<div class="ag-cfg-bd" id="ag-cfg-bd">
+  <div class="ag-cfg-modal">
+    <div class="ag-cfg-head">
+      <h3>⚙️ Configuration des Agendas</h3>
+      <button class="ag-cfg-close" onclick="plCloseAgendaConfig()">×</button>
+    </div>
+    <div class="ag-cfg-body">
+
+      <!-- GOOGLE CALENDAR -->
+      <div class="ag-cfg-source">
+        <div class="ag-cfg-source-head">
+          <span class="ag-cfg-source-icon">📅</span>
+          <span class="ag-cfg-source-title">Google Calendar</span>
+          <div class="ag-cfg-status"><div class="ag-cfg-dot idle" id="ag-dot-gcal"></div><span id="ag-lbl-gcal">Non connecté</span></div>
+        </div>
+        <div class="ag-cfg-hint">
+          Connexion sécurisée via OAuth 2.0. Si vous obtenez une erreur <strong>400 invalid_request</strong>, vous devez ajouter l'URI ci-dessous dans
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> → Identifiants → votre client OAuth → <strong>URI de redirection autorisées</strong> :
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
+          <code id="ag-gcal-redirect-uri" style="font-size:10px;background:var(--bg);border:1px solid var(--border);padding:5px 8px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</code>
+          <button class="ag-cfg-btn ag-cfg-btn-outline" onclick="agCopyRedirectUri()" title="Copier l'URI">📋 Copier</button>
+        </div>
+        <div class="ag-cfg-actions" style="margin-top:10px;">
+          <button class="ag-cfg-btn ag-cfg-btn-primary" id="ag-btn-gcal-connect" onclick="plSyncGCal()">🔗 Connecter Google</button>
+          <button class="ag-cfg-btn ag-cfg-btn-danger" id="ag-btn-gcal-disconnect" onclick="agDisconnectGCal()" style="display:none">🔓 Déconnecter</button>
+        </div>
+      </div>
+
+      <!-- iCLOUD -->
+      <div class="ag-cfg-source">
+        <div class="ag-cfg-source-head">
+          <span class="ag-cfg-source-icon">🍎</span>
+          <span class="ag-cfg-source-title">iCloud Calendar</span>
+          <div class="ag-cfg-status"><div class="ag-cfg-dot idle" id="ag-dot-ical"></div><span id="ag-lbl-ical">Non configuré</span></div>
+        </div>
+        <input class="ag-cfg-input" id="ag-input-ical" type="url" placeholder="webcal://p162-caldav.icloud.com/published/2/…" oninput="agSaveICalUrl()">
+        <div class="ag-cfg-hint">
+          Sur iPhone/Mac : <strong>Calendrier → (votre agenda) → Partager → Lien public</strong> → copier l'URL <code>webcal://</code>.
+        </div>
+        <div class="ag-cfg-actions">
+          <button class="ag-cfg-btn ag-cfg-btn-primary" onclick="agTestICal()">🔄 Tester & Sync</button>
+          <button class="ag-cfg-btn ag-cfg-btn-outline" onclick="agClearICal()">✕ Effacer</button>
+        </div>
+      </div>
+
+      <!-- OFFICE 365 -->
+      <div class="ag-cfg-source">
+        <div class="ag-cfg-source-head">
+          <span class="ag-cfg-source-icon">🏢</span>
+          <span class="ag-cfg-source-title">Office 365 / Outlook</span>
+          <div class="ag-cfg-status"><div class="ag-cfg-dot idle" id="ag-dot-o365"></div><span id="ag-lbl-o365">Non configuré</span></div>
+        </div>
+        <input class="ag-cfg-input" id="ag-input-o365" type="url" placeholder="https://outlook.office365.com/owa/calendar/…/calendar.ics" oninput="agSaveO365Url()">
+        <div class="ag-cfg-hint">
+          Dans Outlook Web : <strong>Calendrier → Paramètres → Calendriers partagés → Publier un calendrier → ICS</strong> → copier le lien.
+        </div>
+        <div class="ag-cfg-actions">
+          <button class="ag-cfg-btn ag-cfg-btn-primary" onclick="agTestO365()">🔄 Tester & Sync</button>
+          <button class="ag-cfg-btn ag-cfg-btn-outline" onclick="agClearO365()">✕ Effacer</button>
+        </div>
+      </div>
+
+    </div>
+    <div class="ag-cfg-footer">
+      <span class="ag-cfg-footer-note">Les URLs sont stockées localement dans votre navigateur.</span>
+      <button class="ag-cfg-btn ag-cfg-btn-primary" onclick="plSyncTout();plCloseAgendaConfig()">🔄 Sync Tout &amp; Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════ SECTION PLANNING SEMAINE ═══════ -->
 <div class="section" id="section-planning">
 <div class="pl-wrap">
@@ -3914,12 +4019,10 @@ function renderAgenda(){
     <div><div class="pl-title">Planning <span>Semaine</span></div></div>
     <div class="pl-header-right">
       <button class="pl-btn" onclick="plGoToday()">📍 Aujourd'hui</button>
-      <button class="pl-btn" id="pl-sync-all-btn" onclick="plSyncTout()" title="Sync Apple Calendar + Google Calendar">🔄 Sync Tout</button>
-      <label class="pl-btn" title="Importer un fichier .ics depuis ton Mac/iPhone" style="cursor:pointer">📂 .ics<input type="file" accept=".ics,.ical" style="display:none" onchange="plImportICSFile(this)"></label>
-      <button class="pl-btn" id="pl-ical-btn" onclick="plSyncICal()" title="Importer depuis Calendrier Apple (iCloud)">📱 iCal</button>
-      <button class="pl-btn" onclick="plSyncGCal()">🔄 GCal</button>
-      <button class="pl-btn" onclick="plDisconnectGCal()" title="Déconnecter Google Calendar">🔓 GCal</button>
-      <button class="pl-btn" onclick="plImportCalPub()" title="Importer le calendrier éditorial">📋 Cal. Pub</button>
+      <button class="pl-btn pl-btn-gold" id="pl-sync-all-btn" onclick="plSyncTout()" title="Synchroniser Google Calendar, iCloud et Office 365">🔄 Sync Agendas</button>
+      <button class="pl-btn" onclick="plOpenAgendaConfig()" title="Configurer les agendas connectés">⚙️ Agendas</button>
+      <label class="pl-btn" title="Importer un fichier .ics depuis ton Mac/iPhone" style="cursor:pointer;display:none">📂 .ics<input type="file" accept=".ics,.ical" style="display:none" onchange="plImportICSFile(this)"></label>
+      <button class="pl-btn" onclick="plImportCalPub()" title="Importer le calendrier éditorial" style="display:none">📋 Cal. Pub</button>
       <div class="pl-week-nav">
         <button onclick="plPrevWeek()">← Préc.</button>
         <span class="pl-week-label" id="pl-week-label">—</span>
@@ -4160,7 +4263,7 @@ async function _gcalExchange(code){
         code,
         code_verifier:verifier,
         grant_type:'authorization_code',
-        redirect_uri:window.location.origin+window.location.pathname
+        redirect_uri:'https://marcpfr-creator.github.io/eastrategies-tout-en-un/'
       })
     });
     const d=await r.json();
@@ -4245,7 +4348,7 @@ async function plSyncGCal(){
   sessionStorage.setItem('gcal_v',verifier);
   const authUrl='https://accounts.google.com/o/oauth2/v2/auth?'+new URLSearchParams({
     client_id:GCAL_CLIENT_ID,
-    redirect_uri:window.location.origin+window.location.pathname,
+    redirect_uri:'https://marcpfr-creator.github.io/eastrategies-tout-en-un/',
     response_type:'code',
     scope:GCAL_SCOPE,
     code_challenge:challenge,
@@ -4310,18 +4413,31 @@ function plMergeGCal(){
 
 // ─── ICAL FETCH HELPER ───────────────────────────────────────────
 async function _fetchICSText(url){
-  const clean=url.replace(/^webcal:/,'https:');
-  for(let i=0;i<CORS_PROXIES.length;i++){
-    try{
-      const fetchUrl=CORS_PROXIES[i]===''?clean:CORS_PROXIES[i]+encodeURIComponent(clean);
-      const res=await fetch(fetchUrl,{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'text/calendar,*/*'}});
-      if(!res.ok)throw new Error('HTTP '+res.status);
-      const text=await res.text();
-      if(!text.includes('BEGIN:VCALENDAR'))throw new Error('Format invalide');
+  const clean = url.replace(/^webcal:/, 'https:');
+  // corsproxy.io est le seul proxy fiable testé — on réessaie 2 fois
+  const proxies = [
+    'https://corsproxy.io/?',
+    'https://corsproxy.io/?',
+  ];
+  for (let i = 0; i < proxies.length; i++) {
+    try {
+      const fetchUrl = proxies[i] + encodeURIComponent(clean);
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 15000);
+      const res = await fetch(fetchUrl, {
+        signal: ctrl.signal,
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/calendar,*/*' }
+      });
+      clearTimeout(tid);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      if (!text.includes('BEGIN:VCALENDAR')) throw new Error('Réponse invalide (pas un fichier ICS)');
       return text;
-    }catch(e){console.warn('[iCal] proxy '+i+' échoué:',e.message);}
+    } catch(e) {
+      console.warn('[iCal] tentative ' + (i+1) + ' échouée:', e.message);
+    }
   }
-  throw new Error('Tous les proxies ont échoué — vérifie ta connexion ou l\'URL');
+  throw new Error('Impossible de récupérer le calendrier. Vérifiez que l\'URL est publique.');
 }
 // ─── ICAL (APPLE CALENDAR / iCLOUD) ──────────────────────────────
 function _dtLocal(d){
@@ -4348,6 +4464,7 @@ function plMergeAllICal(evs){
   });
 }
 const ICAL_PLANNING_URL='webcal://p102-caldav.icloud.com/published/2/MTk0ODc5NjI2MTk0ODc5NnLErrSuR1nX3uoLQpIJEHSlX2Kq_EDrcz_Iz763CPFoRBxh9o2VZ83a7yt2OvILhtTd7j7zt8C8bW-vtUkYI_0';
+const O365_DEFAULT_URL='https://outlook.office365.com/owa/calendar/b73d5f9ceae146d8b9b38a24af65eb93@eastrategies.onmicrosoft.com/17d640eb22874937a4c11ad0013393137627364917413513926/S-1-8-1898156234-1521683210-1672805402-426643472/reachcalendar.ics';
 async function plSyncICal(forcePrompt){
   const btn=document.getElementById('pl-ical-btn');
   if(btn)btn.textContent='🔄 iCal…';
@@ -4612,10 +4729,255 @@ function plImportCalPub(){
 }
 
 // ─── INIT ────────────────────────────────────────────────────────
-window.addEventListener('load', function(){
-  // Mettre à jour le label du bouton si déjà connecté (token en localStorage)
-  const btn=document.querySelector('.pl-btn[onclick*=plSyncGCal]');
-  if(btn&&gcalAccessToken)btn.textContent='✅ GCal connecté';
+// ─── OFFICE 365 / OUTLOOK ICS ──────────────────────────────────────
+const O365_URL_KEY = 'o365_ics_url';
+let o365Events = [];
+try { const _o = localStorage.getItem('o365Events'); if(_o) o365Events = JSON.parse(_o); } catch {}
+
+async function o365FetchEvents() {
+  const url = localStorage.getItem(O365_URL_KEY) || O365_DEFAULT_URL || '';
+  if (!url) return [];
+  const text = await _fetchICSText(url);
+  const icsEvs = parseICS(text);
+  const plEvs = icsEvs.map(ev => ({
+    event_id: ev.uid || ('o365_' + Math.random().toString(36).slice(2)),
+    title: ev.summary || 'Evénement',
+    start_time: _dtLocal(ev.start),
+    end_time: ev.end ? _dtLocal(ev.end) : '',
+    _src: 'o365'
+  }));
+  o365Events = plEvs;
+  localStorage.setItem('o365Events', JSON.stringify(plEvs));
+  return plEvs;
+}
+
+function plMergeO365() {
+  if (!o365Events || !o365Events.length) return;
+  const weeks = new Set();
+  o365Events.forEach(ev => { if (ev.start_time) weeks.add(plISO(new Date(ev.start_time.substring(0,10) + 'T12:00:00'))); });
+  weeks.forEach(wk => {
+    const days = plDays(wk);
+    o365Events.forEach(ev => {
+      if (!ev.start_time) return;
+      const d = ev.start_time.substring(0,10);
+      const di = days.findIndex(day => day.date === d); if (di < 0) return;
+      const cu = PLS.cu(wk, di); if (cu.some(c => c._cid === ev.event_id)) return;
+      const sh = ev.start_time.substring(11,16).replace(':','h');
+      const eh = ev.end_time ? ev.end_time.substring(11,16).replace(':','h') : '';
+      const tLabel = sh && sh !== '00h00' ? (sh + (eh && eh !== '00h00' ? '–' + eh : '')) : '';
+      cu.push({ t: tLabel, title: ev.title || 'Evénement', sub: '🏢 Office 365', cat: 'rdv', ico: '📅', _cid: ev.event_id });
+      PLS.saveCu(wk, di, cu);
+    });
+  });
+}
+
+// Recharger les events O365 au démarrage
+(function() {
+  try {
+    const s = localStorage.getItem('o365Events');
+    if (s) { const evs = JSON.parse(s); if (evs && evs.length) { setTimeout(() => { o365Events = evs; plMergeO365(); plRender(); }, 400); } }
+  } catch {}
+})();
+
+// ─── SYNC TOUT (Google + iCloud + Office 365) ──────────────────────────────────────
+plSyncTout = async function() {
+  const btn = document.getElementById('pl-sync-all-btn');
+  if (btn) { btn.textContent = '🔄 Sync…'; btn.disabled = true; }
+  let total = 0, errors = [];
+
+  // 1. iCloud
+  try {
+    const url = (localStorage.getItem('ical_planning_url') || ICAL_PLANNING_URL || '').replace(/^webcal:/, 'https:');
+    if (url) {
+      const text = await _fetchICSText(url);
+      const icsEvs = parseICS(text);
+      const plEvs = icsEvs.map(ev => ({
+        event_id: ev.uid || ('ical_' + Math.random().toString(36).slice(2)),
+        title: ev.summary || 'Evénement',
+        start_time: _dtLocal(ev.start),
+        end_time: ev.end ? _dtLocal(ev.end) : ''
+      }));
+      localStorage.setItem('icalEvents', JSON.stringify(plEvs));
+      plMergeAllICal(plEvs);
+      total += plEvs.length;
+      agSetStatus('ical', 'ok', plEvs.length + ' événements');
+    }
+  } catch(e) { errors.push('iCloud: ' + e.message); agSetStatus('ical', 'err', 'Erreur'); }
+
+  // 2. Office 365
+  try {
+    const o365url = localStorage.getItem(O365_URL_KEY) || '';
+    if (o365url) {
+      const evs = await o365FetchEvents();
+      plMergeO365();
+      total += evs.length;
+      agSetStatus('o365', 'ok', evs.length + ' événements');
+    }
+  } catch(e) { errors.push('Office 365: ' + e.message); agSetStatus('o365', 'err', 'Erreur'); }
+
+  // 3. Google Calendar
+  if (gcalAccessToken) {
+    try {
+      await gcalFetchEvents();
+      plMergeGCal();
+      total += calEvents.length;
+      agSetStatus('gcal', 'ok', calEvents.length + ' événements');
+    } catch(e) { errors.push('Google: ' + e.message); agSetStatus('gcal', 'err', 'Erreur'); }
+  }
+
+  plRender();
+  if (btn) btn.disabled = false;
+
+  const hasICal = !!(localStorage.getItem('ical_planning_url') || ICAL_PLANNING_URL);
+  const hasO365 = !!localStorage.getItem(O365_URL_KEY);
+  const hasGCal = !!gcalAccessToken;
+
+  if (!hasGCal && !hasO365 && !hasICal) {
+    if (btn) btn.textContent = '⚙️ Configurer';
+    plOpenAgendaConfig();
+    return;
+  }
+  if (errors.length) {
+    if (btn) btn.textContent = '⚠️ Sync (' + total + ')';
+    setTimeout(() => { if (btn) btn.textContent = '🔄 Sync Agendas'; }, 4000);
+  } else {
+    if (btn) btn.textContent = '✅ Syncé (' + total + ')';
+    setTimeout(() => { if (btn) btn.textContent = '🔄 Sync Agendas'; }, 3000);
+  }
+  if (!hasGCal && (hasICal || hasO365)) {
+    const connect = confirm('✅ Sync terminé (' + total + ' événements)\n\nConnectez aussi Google Calendar ?');
+    if (connect) plSyncGCal();
+  }
+};
+
+// ─── MODAL CONFIG AGENDAS ──────────────────────────────────────────
+function agSetStatus(src, state, label) {
+  const dot = document.getElementById('ag-dot-' + src);
+  const lbl = document.getElementById('ag-lbl-' + src);
+  if (dot) dot.className = 'ag-cfg-dot ' + state;
+  if (lbl) lbl.textContent = label || state;
+}
+
+function agCopyRedirectUri() {
+  const uri = 'https://marcpfr-creator.github.io/eastrategies-tout-en-un/';
+  navigator.clipboard.writeText(uri).then(() => {
+    const btn = document.querySelector('[onclick="agCopyRedirectUri()"]');
+    if (btn) { const old = btn.textContent; btn.textContent = '\u2705 Copié'; setTimeout(() => btn.textContent = old, 2000); }
+  }).catch(() => {
+    prompt('Copiez cette URI :', uri);
+  });
+}
+
+function plOpenAgendaConfig() {
+  const bd = document.getElementById('ag-cfg-bd'); if (!bd) return;
+  // Afficher l'URI de redirection Google
+  const uriEl = document.getElementById('ag-gcal-redirect-uri');
+  if (uriEl) uriEl.textContent = 'https://marcpfr-creator.github.io/eastrategies-tout-en-un/';
+  const iCalInput = document.getElementById('ag-input-ical');
+  if (iCalInput) iCalInput.value = localStorage.getItem('ical_planning_url') || ICAL_PLANNING_URL || '';
+  const o365Input = document.getElementById('ag-input-o365');
+  if (o365Input) o365Input.value = localStorage.getItem(O365_URL_KEY) || O365_DEFAULT_URL || '';
+  if (gcalAccessToken) {
+    agSetStatus('gcal', 'ok', 'Connecté');
+    const btnC = document.getElementById('ag-btn-gcal-connect'); if (btnC) btnC.style.display = 'none';
+    const btnD = document.getElementById('ag-btn-gcal-disconnect'); if (btnD) btnD.style.display = 'inline-block';
+  } else {
+    agSetStatus('gcal', 'idle', 'Non connecté');
+    const btnC = document.getElementById('ag-btn-gcal-connect'); if (btnC) btnC.style.display = 'inline-block';
+    const btnD = document.getElementById('ag-btn-gcal-disconnect'); if (btnD) btnD.style.display = 'none';
+  }
+  const icalUrl = localStorage.getItem('ical_planning_url') || ICAL_PLANNING_URL || '';
+  agSetStatus('ical', icalUrl ? 'ok' : 'idle', icalUrl ? 'URL configurée' : 'Non configuré');
+  const o365Url = localStorage.getItem(O365_URL_KEY) || O365_DEFAULT_URL || '';
+  agSetStatus('o365', o365Url ? 'ok' : 'idle', o365Url ? 'URL configurée' : 'Non configuré');
+  bd.classList.add('open');
+}
+
+function plCloseAgendaConfig() {
+  const bd = document.getElementById('ag-cfg-bd'); if (bd) bd.classList.remove('open');
+}
+
+function agSaveICalUrl() {
+  const v = (document.getElementById('ag-input-ical') || {}).value || '';
+  if (v.trim()) localStorage.setItem('ical_planning_url', v.trim());
+  agSetStatus('ical', v.trim() ? 'ok' : 'idle', v.trim() ? 'URL configurée' : 'Non configuré');
+}
+
+function agSaveO365Url() {
+  const v = (document.getElementById('ag-input-o365') || {}).value || '';
+  if (v.trim()) localStorage.setItem(O365_URL_KEY, v.trim());
+  agSetStatus('o365', v.trim() ? 'ok' : 'idle', v.trim() ? 'URL configurée' : 'Non configuré');
+}
+
+async function agTestICal() {
+  agSetStatus('ical', 'loading', 'Test en cours…');
+  try {
+    const url = (localStorage.getItem('ical_planning_url') || ICAL_PLANNING_URL || '').replace(/^webcal:/, 'https:');
+    if (!url) { agSetStatus('ical', 'err', 'URL manquante'); return; }
+    const text = await _fetchICSText(url);
+    const icsEvs = parseICS(text);
+    const plEvs = icsEvs.map(ev => ({
+      event_id: ev.uid || ('ical_' + Math.random().toString(36).slice(2)),
+      title: ev.summary || 'Evénement',
+      start_time: _dtLocal(ev.start),
+      end_time: ev.end ? _dtLocal(ev.end) : ''
+    }));
+    localStorage.setItem('icalEvents', JSON.stringify(plEvs));
+    plMergeAllICal(plEvs);
+    plRender();
+    agSetStatus('ical', 'ok', plEvs.length + ' événements');
+  } catch(e) { agSetStatus('ical', 'err', 'Erreur : ' + e.message); }
+}
+
+async function agTestO365() {
+  agSetStatus('o365', 'loading', 'Test en cours…');
+  try {
+    const evs = await o365FetchEvents();
+    plMergeO365();
+    plRender();
+    agSetStatus('o365', 'ok', evs.length + ' événements');
+  } catch(e) { agSetStatus('o365', 'err', 'Erreur : ' + e.message); }
+}
+
+function agClearICal() {
+  localStorage.removeItem('ical_planning_url');
+  localStorage.removeItem('icalEvents');
+  const inp = document.getElementById('ag-input-ical'); if (inp) inp.value = '';
+  agSetStatus('ical', 'idle', 'Effacé');
+}
+
+function agClearO365() {
+  localStorage.removeItem(O365_URL_KEY);
+  localStorage.removeItem('o365Events');
+  const inp = document.getElementById('ag-input-o365'); if (inp) inp.value = '';
+  agSetStatus('o365', 'idle', 'Effacé');
+}
+
+function agDisconnectGCal() {
+  plDisconnectGCal();
+  agSetStatus('gcal', 'idle', 'Déconnecté');
+  const btnC = document.getElementById('ag-btn-gcal-connect'); if (btnC) btnC.style.display = 'inline-block';
+  const btnD = document.getElementById('ag-btn-gcal-disconnect'); if (btnD) btnD.style.display = 'none';
+}
+
+// Fermer le modal en cliquant sur le fond
+(function() {
+  const bd = document.getElementById('ag-cfg-bd');
+  if (bd) bd.addEventListener('click', function(e) { if (e.target === this) plCloseAgendaConfig(); });
+})();
+
+// ─── INIT ────────────────────────────────────────────────────
+window.addEventListener('load', function() {
+  const syncBtn = document.getElementById('pl-sync-all-btn');
+  const hasGCal = !!gcalAccessToken;
+  const hasICal = !!(localStorage.getItem('ical_planning_url') || ICAL_PLANNING_URL);
+  const hasO365 = !!(localStorage.getItem(O365_URL_KEY) || O365_DEFAULT_URL);
+  const n = [hasGCal, hasICal, hasO365].filter(Boolean).length;
+  if (syncBtn && n > 0) syncBtn.textContent = '🔄 Sync Agendas (' + n + ')';
+  // Auto-sync au chargement si au moins une source configurée
+  if (hasICal || hasO365 || hasGCal) {
+    setTimeout(() => plSyncTout(), 800);
+  }
 });
 
 // ═══════════════════════════════════════════════════════
