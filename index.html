@@ -4120,6 +4120,7 @@ function plGCal(title,date,tr,desc){
 
 // ─── GOOGLE CALENDAR OAUTH — PKCE ────────────────────────────────
 const GCAL_CLIENT_ID='1034644588520-5461t8kughc8g3klhg7v30g89eelmqnd.apps.googleusercontent.com';
+const GCAL_CLIENT_SECRET='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';
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 let gcalAccessToken=localStorage.getItem('gcalAccessToken')||null;
 // calEvents déjà déclaré dans le script précédent — on le réinitialise depuis localStorage si dispo
@@ -4149,6 +4150,7 @@ async function _gcalExchange(code){
       headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body:new URLSearchParams({
         client_id:GCAL_CLIENT_ID,
+        client_secret:GCAL_CLIENT_SECRET,
         code,
         code_verifier:verifier,
         grant_type:'authorization_code',
