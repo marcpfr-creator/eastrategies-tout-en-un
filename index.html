@@ -3982,7 +3982,6 @@ function renderAgenda(){
           <button class="ag-cfg-btn ag-cfg-btn-primary" id="ag-btn-gcal-connect" onclick="plSyncGCal()">🔗 Connecter Google</button>
           <button class="ag-cfg-btn ag-cfg-btn-danger" id="ag-btn-gcal-disconnect" onclick="agDisconnectGCal()" style="display:none">🔓 Déconnecter</button>
           <button class="ag-cfg-btn ag-cfg-btn-outline" onclick="agClearGCalCache()" title="Vider le cache et forcer une nouvelle connexion">🗑️ Vider cache</button>
-          <button class="ag-cfg-btn ag-cfg-btn-outline" onclick="agDiagGCal()" title="Voir les événements récupérés">🔍 Diagnostic</button>
         </div>
       </div>
 
@@ -4883,33 +4882,6 @@ function agSetStatus(src, state, label) {
   if (lbl) lbl.textContent = label || state;
 }
 
-async function agDiagGCal() {
-  if (!gcalAccessToken) { alert('GCal non connecté. Connectez-vous d\'abord.'); return; }
-  const headers = {Authorization: 'Bearer ' + gcalAccessToken};
-  try {
-    // Test token valide
-    const me = await fetch('https://www.googleapis.com/oauth2/v1/userinfo', {headers});
-    const meData = await me.json();
-    if (!me.ok) { alert('Token invalide: ' + JSON.stringify(meData)); return; }
-    
-    // Test calendarList
-    const cl = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {headers});
-    const clData = await cl.json();
-    const cals = (clData.items || []).map(c => c.summary + ' (' + c.id + ')').join('\n');
-    
-    // Événements en cache
-    const cached = JSON.parse(localStorage.getItem('gcalEvents') || '[]');
-    const sample = cached.slice(0,5).map(e => e.start_time.substring(0,10) + ' ' + e.title).join('\n') || '(aucun)';
-    
-    alert('📅 DIAGNOSTIC GOOGLE CALENDAR\n\n'
-      + 'Compte : ' + (meData.email || '?') + '\n'
-      + 'Calendriers (' + (clData.items||[]).length + ') :\n' + cals + '\n\n'
-      + 'Événements en cache : ' + cached.length + '\n\n'
-      + 'Exemples :\n' + sample);
-  } catch(e) {
-    alert('Erreur diagnostic : ' + e.message);
-  }
-}
 
 function agClearGCalCache() {
   gcalAccessToken = null;
