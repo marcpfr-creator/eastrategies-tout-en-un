@@ -4318,6 +4318,12 @@ async function gcalFetchEvents(){
     calEvents = allEvents;
     localStorage.setItem('gcalEvents', JSON.stringify(calEvents));
     console.log('[GCal] TOTAL: '+calEvents.length+' événements sur '+calendars.length+' calendriers');
+    if(calEvents.length > 0) {
+      const sample = calEvents.slice(0,3).map(e=>e.start_time.substring(0,10)+' '+e.title).join('\n');
+      console.log('[GCal] Exemples:', sample);
+    } else {
+      console.warn('[GCal] 0 événements récupérés — vérifiez la période et les droits du calendrier');
+    }
   }catch(e){console.error('[GCal]',e); alert('Erreur GCal: '+e.message);}
 }
 
@@ -4392,17 +4398,30 @@ async function plSyncGCal(){
 }
 
 function plMergeGCal(){
-  if(!calEvents||!calEvents.length)return;
-  [plWKey,plAdd(plWKey,1)].forEach(wk=>{
-    const days=plDays(wk);
-    calEvents.forEach(ev=>{
-      if(!ev.start_time)return;const d=ev.start_time.substring(0,10);const di=days.findIndex(day=>day.date===d);if(di<0)return;
-      const cu=PLS.cu(wk,di);if(cu.some(c=>c._cid===ev.event_id))return;
-      const sh=ev.start_time.substring(11,16).replace(':','h'),eh=ev.end_time?ev.end_time.substring(11,16).replace(':','h'):'';
-      cu.push({t:sh+(eh?'–'+eh:''),title:ev.title||'Événement',sub:'📅 Google Calendar',cat:'rdv',ico:'📅',_cid:ev.event_id});
-      PLS.saveCu(wk,di,cu);
+  if(!calEvents||!calEvents.length){ console.log('[GCal] plMergeGCal: aucun événement à fusionner'); return; }
+  console.log('[GCal] plMergeGCal: fusion de', calEvents.length, 'événements');
+  // Collecter toutes les semaines concernées par les événements GCal
+  const weeks = new Set();
+  calEvents.forEach(ev => {
+    if(!ev.start_time) return;
+    try { weeks.add(plISO(new Date(ev.start_time.substring(0,10)+'T12:00:00'))); } catch(e){}
+  });
+  weeks.forEach(wk => {
+    const days = plDays(wk);
+    calEvents.forEach(ev => {
+      if(!ev.start_time) return;
+      const d = ev.start_time.substring(0,10);
+      const di = days.findIndex(day => day.date === d);
+      if(di < 0) return;
+      const cu = PLS.cu(wk, di);
+      if(cu.some(c => c._cid === ev.event_id)) return;
+      const sh = ev.start_time.substring(11,16).replace(':','h');
+      const eh = ev.end_time ? ev.end_time.substring(11,16).replace(':','h') : '';
+      cu.push({t: sh+(eh?'–'+eh:''), title: ev.title||'Événement', sub:'📅 Google Calendar', cat:'rdv', ico:'📅', _cid: ev.event_id});
+      PLS.saveCu(wk, di, cu);
     });
   });
+  console.log('[GCal] plMergeGCal: fusion terminée pour', weeks.size, 'semaines');
 }
 
 // ─── ICAL FETCH HELPER ───────────────────────────────────────────
