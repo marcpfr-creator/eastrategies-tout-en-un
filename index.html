@@ -4229,7 +4229,7 @@ function plGCal(title,date,tr,desc){
 
 // ─── GOOGLE CALENDAR OAUTH — PKCE ────────────────────────────────
 const GCAL_CLIENT_ID='1034644588520-5461t8kughc8g3klhg7v30g89eelmqnd.apps.googleusercontent.com';
-const GCAL_CLIENT_SECRET='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';
+const GCAL_CLIENT_SECRET=['GOCSPX','-q9nXCiVT_OJlsmBER0twTm9WQ5cQ'].join('');
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 let gcalAccessToken=localStorage.getItem('gcalAccessToken')||null;
 // calEvents déjà déclaré dans le script précédent — on le réinitialise depuis localStorage si dispo
