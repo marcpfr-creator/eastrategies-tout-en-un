@@ -4202,8 +4202,19 @@ async function gcalFetchEvents(){
     }));
     calEvents=allEvents;
     localStorage.setItem('gcalEvents',JSON.stringify(calEvents));
+    // ─── DIAGNOSTIC TEMPORAIRE ───────────────────────────────────
+    const calNames=calendars.map(c=>c.summary).join(', ');
+    const evSample=calEvents.slice(0,3).map(e=>e.start_time.substring(0,10)+' '+e.title).join('\n');
+    const plDaysCur=plDays(plWKey).map(d=>d.date);
+    alert('📅 GCal Diagnostic\n\n'
+      +'Calendriers ('+calendars.length+') : '+calNames+'\n'
+      +'Événements trouvés : '+calEvents.length+'\n'
+      +(evSample?'Premiers:\n'+evSample+'\n':'')+'\n'
+      +'Semaine affichée : '+plWKey+'\n'
+      +'Dates ('+plDaysCur[0]+' → '+plDaysCur[6]+')');
+    // ─────────────────────────────────────────────────────────────
     console.log('[GCal] '+calEvents.length+' événements chargés depuis '+calendars.length+' calendriers');
-  }catch(e){console.error('[GCal]',e);}
+  }catch(e){console.error('[GCal]',e);alert('Erreur GCal: '+e.message);}
 }
 
 async function plSyncGCal(){
