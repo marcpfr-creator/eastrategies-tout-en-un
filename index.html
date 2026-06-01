@@ -3449,6 +3449,12 @@ function renderAgenda(){
       const es=e.start; es.setHours?true:null;
       const eDay=new Date(e.start); eDay.setHours(0,0,0,0);
       return eDay.toDateString()===day.toDateString();
+    }).sort((a,b)=>{
+      // Journée entière en premier, puis tri par heure croissante
+      if(a.allDay && b.allDay) return 0;
+      if(a.allDay) return -1;
+      if(b.allDay) return 1;
+      return a.start - b.start;
     });
     weekCols+=`<div class="ag-day-col${isToday?' ag-today':''}">
       <div class="ag-day-header">
@@ -4709,7 +4715,17 @@ function plRDay(dayInfo,wk,di){
   const cls=`pl-day${isOff?' pl-off':''}${isPart?' pl-partial':''}${isToday?' pl-today':''}`;
 
   let bHtml='';const cu=PLS.cu(wk,di);
-  cu.forEach((b,ci)=>{bHtml+=plRBl(b,`${wk}_d${di}_c${ci}`,wk,di,ci,date);});
+  // Trier les blocs par heure de début (format "9h00-10h00" ou "09:00-10:00")
+  const cuSorted=[...cu].map((b,ci)=>({b,ci})).sort((x,y)=>{
+    const parseT=s=>{
+      if(!s||typeof s!=='string')return 9999;
+      const m=s.match(/(\d{1,2})[h:](\d{0,2})/);
+      if(!m)return 9999;
+      return parseInt(m[1])*60+(parseInt(m[2]||'0')||0);
+    };
+    return parseT(x.b.t)-parseT(y.b.t);
+  });
+  cuSorted.forEach(({b,ci})=>{bHtml+=plRBl(b,`${wk}_d${di}_c${ci}`,wk,di,ci,date);});
   if(isToday)plRollover().forEach(b=>{bHtml+=`<div class="pl-block cat-todo"><div class="pl-block-main"><span class="pl-block-icon">📌</span><div class="pl-block-info"><div class="pl-block-time">${b.t}</div><div class="pl-block-title">${b.title}</div><div class="pl-block-sub">${b.sub}</div></div></div></div>`;});
 
   const settF=`<div class="pl-day-settings" id="plds_${wk}_${di}"><div class="pl-edit-row"><input class="pl-edit-in" style="flex:1" data-f="sub" placeholder="Sous-titre" value="${sub.replace(/"/g,'&quot;')}"><input class="pl-edit-in" style="max-width:70px" data-f="badge" placeholder="Badge" value="${badge.replace(/"/g,'&quot;')}"></div><div class="pl-edit-row">${plHeadSel(head)}</div><div class="pl-edit-row" style="gap:10px;align-items:center;font-size:11px"><label><input type="checkbox" data-f="off" ${isOff?'checked':''}> OFF</label><label><input type="checkbox" data-f="partial" ${isPart?'checked':''}> PM seulement</label></div><div class="pl-edit-acts"><button class="pl-e-save" onclick="plDSSave('${wk}',${di})">💾</button><button class="pl-e-cancel" onclick="plDSShow('${wk}',${di})">✗</button></div></div>`;
