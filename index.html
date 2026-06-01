@@ -810,7 +810,6 @@ header { padding-top: max(16px, env(safe-area-inset-top)); }
 .pl-wadd{grid-column:1/-1;display:flex;gap:6px;padding:4px 0}
 </style>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -4100,14 +4099,76 @@ function plGCal(title,date,tr,desc){
   return'https://calendar.google.com/calendar/render?action=TEMPLATE&text='+encodeURIComponent(title)+'&dates='+fm(p[0])+'/'+fm(p[1]||p[0])+'&details='+encodeURIComponent(desc||'Eastrategies®');
 }
 
-// ─── SYNC GCAL ───────────────────────────────────────────────────
-function plSyncGCal(){
-  if(typeof calEvents!=='undefined'&&calEvents&&calEvents.length){plMergeGCal();plRender();alert('✅ '+calEvents.length+' événements fusionnés.');return;}
-  
-  else alert('Ouvre d\'abord l\'onglet Agenda iCloud et synchronise.');
+// ─── GOOGLE CALENDAR OAUTH ───────────────────────────────────────
+const GCAL_CLIENT_ID='1034644588520-5461t8kughc8g3klhg7v30g89eelmqnd.apps.googleusercontent.com';
+const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
+let gcalTokenClient=null;
+let gcalAccessToken=localStorage.getItem('gcalAccessToken')||null;
+let calEvents=[];
+try{calEvents=JSON.parse(localStorage.getItem('gcalEvents')||'[]');}catch{}
+
+function plInitGCal(){
+  if(!window.google||!window.google.accounts){setTimeout(plInitGCal,500);return;}
+  gcalTokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:GCAL_CLIENT_ID,
+    scope:GCAL_SCOPE,
+    callback:async(resp)=>{
+      if(resp.error){alert('Erreur Google Calendar : '+resp.error);return;}
+      gcalAccessToken=resp.access_token;
+      localStorage.setItem('gcalAccessToken',gcalAccessToken);
+      await gcalFetchEvents();
+      plMergeGCal();plRender();
+      const btn=document.querySelector('.pl-btn[onclick*=plSyncGCal]');
+      if(btn)btn.textContent='✅ GCal connecté';
+    }
+  });
 }
+
+async function gcalFetchEvents(){
+  try{
+    const mon=plMon(plWKey);
+    const tMin=new Date(mon);tMin.setDate(mon.getDate()-1);
+    const tMax=new Date(mon);tMax.setDate(mon.getDate()+14);
+    const url='https://www.googleapis.com/calendar/v3/calendars/primary/events'
+      +'?timeMin='+encodeURIComponent(tMin.toISOString())
+      +'&timeMax='+encodeURIComponent(tMax.toISOString())
+      +'&singleEvents=true&orderBy=startTime&maxResults=100';
+    const resp=await fetch(url,{headers:{Authorization:'Bearer '+gcalAccessToken}});
+    if(!resp.ok){
+      if(resp.status===401){gcalAccessToken=null;localStorage.removeItem('gcalAccessToken');alert('Session expirée, reconnecte-toi.');}
+      return;
+    }
+    const data=await resp.json();
+    calEvents=(data.items||[]).map(ev=>({
+      event_id:ev.id,
+      title:ev.summary||'Événement',
+      start_time:(ev.start.dateTime||ev.start.date+'T00:00:00').substring(0,19),
+      end_time:(ev.end.dateTime||ev.end.date+'T00:00:00').substring(0,19),
+    }));
+    localStorage.setItem('gcalEvents',JSON.stringify(calEvents));
+    console.log('[GCal] '+calEvents.length+' événements chargés');
+  }catch(e){console.error('[GCal]',e);}
+}
+
+function plSyncGCal(){
+  const btn=document.querySelector('.pl-btn[onclick*=plSyncGCal]');
+  // Si déjà un token valide → rafraîchir
+  if(gcalAccessToken){
+    if(btn)btn.textContent='🔄 Chargement…';
+    gcalFetchEvents().then(()=>{plMergeGCal();plRender();if(btn)btn.textContent='✅ GCal connecté';});
+    return;
+  }
+  // Sinon → OAuth popup
+  if(!gcalTokenClient)plInitGCal();
+  setTimeout(()=>{
+    if(!gcalTokenClient){alert('Google Identity Services non chargé. Rechargez la page.');return;}
+    if(btn)btn.textContent='🔄 Connexion…';
+    gcalTokenClient.requestAccessToken({prompt:'consent'});
+  },300);
+}
+
 function plMergeGCal(){
-  if(typeof calEvents==='undefined'||!calEvents)return;
+  if(!calEvents||!calEvents.length)return;
   [plWKey,plAdd(plWKey,1)].forEach(wk=>{
     const days=plDays(wk);
     calEvents.forEach(ev=>{
@@ -4225,6 +4286,13 @@ function jRenderPlanningPanel(){
 }
 
 // ─── INIT ────────────────────────────────────────────────────────
+// Initialiser GCal dès le chargement de la page (GIS asynchrone)
+window.addEventListener('load', function(){
+  plInitGCal();
+  // Mettre à jour le label du bouton si déjà connecté
+  const btn=document.querySelector('.pl-btn[onclick*=plSyncGCal]');
+  if(btn&&gcalAccessToken)btn.textContent='✅ GCal connecté';
+});
 
 // ═══════════════════════════════════════════════════════
 //  OBSIDIAN INTEGRATION
@@ -5168,74 +5236,148 @@ function renderRappels() { twRender(); }
 twLoad();
 twRender();
 
+// Seed publications Juin–Juillet 2026
+function twSeedPublications() {
+  const pubs = [
+    {blog:'2026-06-02',rs:'2026-06-03',wp:'8421',titre:'Sourcing industriel en Europe de l\'Est'},
+    {blog:'2026-06-03',rs:'2026-06-04',wp:'8388',titre:'Bulgarie : taux d\'IS le plus bas de l\'UE'},
+    {blog:'2026-06-04',rs:'2026-06-05',wp:'7516',titre:'Recrutement en Bulgarie'},
+    {blog:'2026-06-05',rs:'2026-06-06',wp:'8422',titre:'34 ans à Bucarest : parcours entrepreneur'},
+    {blog:'2026-06-08',rs:'2026-06-09',wp:'8389',titre:'Sourcing : l\'erreur du fournisseur moins cher'},
+    {blog:'2026-06-09',rs:'2026-06-10',wp:'7514',titre:'Moldavie : marché émergent'},
+    {blog:'2026-06-10',rs:'2026-06-11',wp:'8390',titre:'Réussir son implantation en Europe centrale'},
+    {blog:'2026-06-11',rs:'2026-06-12',wp:'8139',titre:'Faire des affaires en Roumanie 2026'},
+    {blog:'2026-06-15',rs:'2026-06-16',wp:'8391',titre:'Un partenaire unique pour 10 marchés'},
+    {blog:'2026-06-16',rs:'2026-06-17',wp:'8141',titre:'Faire des affaires en Bosnie-Herzégovine'},
+    {blog:'2026-06-17',rs:'2026-06-18',wp:'8392',titre:'Freins PME françaises export CEE'},
+    {blog:'2026-06-18',rs:'2026-06-19',wp:'8143',titre:'Faire des affaires en Turquie'},
+    {blog:'2026-06-22',rs:'2026-06-23',wp:'8393',titre:'Debrecen : nouveau hub automobile'},
+    {blog:'2026-06-23',rs:'2026-06-24',wp:'8145',titre:'Faire des affaires en Bulgarie'},
+    {blog:'2026-06-24',rs:'2026-06-25',wp:'8394',titre:'Sourcing en Turquie'},
+    {blog:'2026-06-25',rs:'2026-06-26',wp:'8147',titre:'Faire des affaires en Hongrie'},
+    {blog:'2026-06-29',rs:'2026-06-30',wp:'8395',titre:'Audit terrain en Roumanie'},
+    {blog:'2026-06-30',rs:'2026-07-01',wp:'8149',titre:'Faire des affaires en Moldavie'},
+    {blog:'2026-07-01',rs:'2026-07-02',wp:'8396',titre:'Management de transition en Europe centrale'},
+    {blog:'2026-07-02',rs:'2026-07-03',wp:'8151',titre:'Faire des affaires en Tchéquie'},
+    {blog:'2026-07-06',rs:'2026-07-07',wp:'8397',titre:'La confiance : clé du succès en CEE'},
+    {blog:'2026-07-07',rs:'2026-07-08',wp:'8153',titre:'Faire des affaires en Slovaquie'},
+    {blog:'2026-07-08',rs:'2026-07-09',wp:'8155',titre:'Faire des affaires en Serbie'},
+    {blog:'2026-07-09',rs:'2026-07-10',wp:'8157',titre:'Faire des affaires en Grèce'},
+    {blog:'2026-07-13',rs:'2026-07-14',wp:'8423',titre:'Freins PME françaises (approfondissement)'},
+    {blog:'2026-07-14',rs:'2026-07-15',wp:'8424',titre:'Debrecen : hub industriel stratégique'},
+    {blog:'2026-07-15',rs:'2026-07-16',wp:'8425',titre:'Turquie : 85M habitants hub industriel'},
+    {blog:'2026-07-16',rs:'2026-07-17',wp:'8426',titre:'Sourcing Roumanie : ETI bretonne -22%'},
+    {blog:'2026-07-20',rs:'2026-07-21',wp:'8427',titre:'La confiance comme avantage concurrentiel'},
+  ];
+  const existingTexts = new Set(twTasks.map(t => t.text.toLowerCase()));
+  let added = 0;
+  pubs.forEach(p => {
+    const t1 = '🌐 Site — ' + p.titre + ' [WP' + p.wp + ']';
+    const t2 = '📱 SocialPilot — ' + p.titre + ' [WP' + p.wp + ']';
+    if (!existingTexts.has(t1.toLowerCase())) {
+      twTasks.push({id:twNextId(),text:t1,prio:'low',source:'admin',due:p.blog,done:false,created:new Date().toISOString().split('T')[0]});
+      existingTexts.add(t1.toLowerCase()); added++;
+    }
+    if (!existingTexts.has(t2.toLowerCase())) {
+      twTasks.push({id:twNextId(),text:t2,prio:'low',source:'admin',due:p.rs,done:false,created:new Date().toISOString().split('T')[0]});
+      existingTexts.add(t2.toLowerCase()); added++;
+    }
+  });
+  if (added > 0) {
+    localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+    twRender();
+    showToast('✓ ' + added + ' publications ajoutées dans À faire');
+  }
+}
+if (!localStorage.getItem('tw_pubs_seeded_v1')) {
+  twSeedPublications();
+  localStorage.setItem('tw_pubs_seeded_v1', '1');
+}
+
 plSeed();
 
 // ─────────────────────────────────────────────
-//  SUPABASE SYNC
+//  SUPABASE SYNC — fetch REST (sans SDK)
 // ─────────────────────────────────────────────
 const SB_URL = 'https://nbxivizwlbavztliswmb.supabase.co';
 const SB_KEY = 'sb_publishable_eN67jsvRuXZ03_mP07oKlw_PWXsgF6d';
-let sbClient = null;
-
-function sbInit() {
-  try {
-    sbClient = supabase.createClient(SB_URL, SB_KEY);
-    sbLoadAll(); // Charger les données au démarrage
-    sbSubscribe(); // Écouter les changements en temps réel
-  } catch(e) {
-    console.warn('Supabase init failed:', e);
-  }
-}
-
-async function sbPush(key, value) {
-  if (!sbClient) return;
-  try {
-    await sbClient.from('sync_data').upsert({ key, value, updated_at: new Date().toISOString() });
-    sbStatus('✓ Sync ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
-  } catch(e) { sbStatus('⚠ Hors ligne'); }
-}
-
-async function sbLoadAll() {
-  if (!sbClient) return;
-  try {
-    const { data, error } = await sbClient.from('sync_data').select('key, value');
-    if (error || !data || !data.length) return;
-    let changed = false;
-    data.forEach(row => {
-      if (row.key === 'main' && row.value) {
-        const d = row.value;
-        if (d.prospects)    { prospects    = d.prospects;    localStorage.setItem(SK, JSON.stringify({prospects,factures,transactions})); changed = true; }
-        if (d.factures)     { factures     = d.factures; }
-        if (d.transactions) { transactions = d.transactions; }
-      }
-      if (row.key === 'tp_entries' && row.value) { tpEntries = row.value; localStorage.setItem('tp_entries', JSON.stringify(tpEntries)); changed = true; }
-      if (row.key === 'tw_tasks'   && row.value) { twTasks   = row.value; localStorage.setItem('tw_tasks',   JSON.stringify(twTasks));   changed = true; }
-    });
-    if (changed) {
-      renderDashboard(); renderPipeline(); renderFacturation(); renderTresorerie();
-      tpRender(); twRender();
-      sbStatus('☁ Synchronisé');
-    }
-  } catch(e) { sbStatus('⚠ Hors ligne'); }
-}
-
-function sbSubscribe() {
-  if (!sbClient) return;
-  sbClient.channel('sync-realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_data' }, () => {
-      sbLoadAll();
-    })
-    .subscribe();
-}
+const SB_HEADERS = {
+  'apikey': SB_KEY,
+  'Authorization': 'Bearer ' + SB_KEY,
+  'Content-Type': 'application/json'
+};
 
 function sbStatus(msg) {
   const el = document.getElementById('sync-status');
   if (el) el.textContent = msg;
 }
 
-// Lancer Supabase après chargement de la page
-if (typeof supabase !== 'undefined') sbInit();
-else window.addEventListener('load', sbInit);
+async function sbPush(key, value) {
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/sync_data', {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ key, value, updated_at: new Date().toISOString() })
+    });
+    if (res.ok) sbStatus('☁ Sync ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+    else sbStatus('⚠ Erreur ' + res.status);
+  } catch(e) { sbStatus('⚠ Hors ligne'); }
+}
+
+async function sbLoadAll() {
+  try {
+    sbStatus('↺ Chargement…');
+    const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,value', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    if (!res.ok) { sbStatus('⚠ Erreur ' + res.status); return; }
+    const data = await res.json();
+    if (!data || !data.length) { sbStatus('☁ Connecté — vide'); return; }
+    let changed = false;
+    data.forEach(row => {
+      if (row.key === 'main' && row.value) {
+        const d = row.value;
+        if (d.prospects)    prospects    = d.prospects;
+        if (d.factures)     factures     = d.factures;
+        if (d.transactions) transactions = d.transactions;
+        localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions}));
+        changed = true;
+      }
+      if (row.key === 'tp_entries' && row.value) {
+        tpEntries = row.value;
+        localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
+        changed = true;
+      }
+      if (row.key === 'tw_tasks' && row.value) {
+        twTasks = row.value;
+        localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+        changed = true;
+      }
+    });
+    if (changed) {
+      renderDashboard(); renderPipeline(); renderFacturation(); renderTresorerie();
+      tpRender(); twRender();
+    }
+    sbStatus('☁ Synchronisé');
+  } catch(e) { sbStatus('⚠ Hors ligne'); }
+}
+
+// Sauvegarde silencieuse (sans toast)
+function sbAutoSave() {
+  try { localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions, saved: new Date().toISOString()})); } catch(e) {}
+  sbPush('main', {prospects, factures, transactions});
+  if (tpEntries && tpEntries.length) { localStorage.setItem('tp_entries', JSON.stringify(tpEntries)); sbPush('tp_entries', tpEntries); }
+  if (twTasks   && twTasks.length)   { localStorage.setItem('tw_tasks',   JSON.stringify(twTasks));   sbPush('tw_tasks',   twTasks);   }
+  const el = document.getElementById('last-save');
+  if (el) el.textContent = 'Auto-sauvegardé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+
+// Polling toutes les 30s pour sync entre appareils + auto-save toutes les 2 min
+window.addEventListener('load', function() {
+  sbLoadAll();
+  setInterval(sbLoadAll, 30000);   // sync depuis Supabase
+  setInterval(sbAutoSave, 120000); // auto-save toutes les 2 min
+});
 
 // ─────────────────────────────────────────────
 //  TEMPS PASSÉ
