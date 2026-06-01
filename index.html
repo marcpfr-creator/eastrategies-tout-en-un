@@ -4279,7 +4279,9 @@ function plMergeGCal(){
 function plToJ(wk,di,name,date){
   const blocks=PLS.cu(wk,di).filter(b=>b.cat!=='pause');
   localStorage.setItem('plJournee',JSON.stringify({dayName:name,date,blocks,wk,di}));
-  
+  const btn=document.querySelector('.tab-btn[onclick*=rappels]');
+  if(btn) switchTab('rappels',btn);
+  setTimeout(jRenderPlanningPanel,80);
 }
 
 // ─── ROLLOVER TODOS ──────────────────────────────────────────────
