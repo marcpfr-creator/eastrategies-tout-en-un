@@ -873,7 +873,6 @@ header { padding-top: max(16px, env(safe-area-inset-top)); }
   <button class="tab-btn" onclick="switchTab('tresorerie',this)">💰 Trésorerie</button>
   <button class="tab-btn" onclick="switchTab('resultat',this)">📈 Résultat Annuel</button>
   <button class="tab-btn" id="tab-rappels-btn" onclick="switchTab('rappels',this)">📋 Tâches Semaine</button>
-  <button class="tab-btn" onclick="switchTab('vibe',this)">⬆ Import Vibe</button>
   <button class="tab-btn" onclick="switchTab('obsidian',this)">🔗 Obsidian</button>
   <button class="tab-btn" onclick="switchTab('weekly',this)">📓 Weekly</button>
   <button class="tab-btn" onclick="switchTab('planning',this)">📅 Planning Semaine</button>
@@ -3913,6 +3912,7 @@ function renderAgenda(){
     <div class="pl-header-right">
       <button class="pl-btn" onclick="plGoToday()">📍 Aujourd'hui</button>
       <button class="pl-btn" onclick="plSyncGCal()">🔄 Sync GCal</button>
+      <button class="pl-btn" onclick="plDisconnectGCal()" title="Déconnecter Google Calendar">🔓 GCal</button>
       <button class="pl-btn" onclick="plImportCalPub()" title="Importer le calendrier éditorial">📋 Cal. Pub</button>
       <div class="pl-week-nav">
         <button onclick="plPrevWeek()">← Préc.</button>
@@ -4126,6 +4126,17 @@ let gcalAccessToken=localStorage.getItem('gcalAccessToken')||null;
 try{const _ce=localStorage.getItem('gcalEvents');if(_ce)calEvents=JSON.parse(_ce);}catch{}
 
 function plInitGCal(){} // no-op — PKCE ne nécessite pas d'init
+
+function plDisconnectGCal(){
+  gcalAccessToken=null;
+  localStorage.removeItem('gcalAccessToken');
+  localStorage.removeItem('gcalEvents');
+  localStorage.removeItem('gcal_oauth_result');
+  sessionStorage.removeItem('gcal_v');
+  const btn=document.querySelector('.pl-btn[onclick*=plSyncGCal]');
+  if(btn)btn.textContent='🔄 Sync GCal';
+  alert('GCal déconnecté. Clique sur "🔄 Sync GCal" pour reconnecter.');
+}
 
 function _gcalVerifier(){const arr=new Uint8Array(64);crypto.getRandomValues(arr);return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
 async function _gcalChallenge(v){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return btoa(String.fromCharCode(...new Uint8Array(h))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
