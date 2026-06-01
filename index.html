@@ -3957,12 +3957,12 @@ function renderAgenda(){
           <div class="ag-cfg-status"><div class="ag-cfg-dot idle" id="ag-dot-gcal"></div><span id="ag-lbl-gcal">Non connecté</span></div>
         </div>
         <div class="ag-cfg-hint">
-          Connexion sécurisée via OAuth 2.0. Si vous obtenez une erreur <strong>400 invalid_request</strong>, vous devez ajouter l'URI ci-dessous dans
-          <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> → Identifiants → votre client OAuth → <strong>URI de redirection autorisées</strong> :
+          Connexion sécurisée via OAuth 2.0. Si erreur <strong>400</strong>, ajoutez cette URI dans
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> → votre client OAuth → <strong>URI de redirection autorisées</strong> :
         </div>
-        <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
-          <code id="ag-gcal-redirect-uri" style="font-size:10px;background:var(--bg);border:1px solid var(--border);padding:5px 8px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">https://marcpfr-creator.github.io/eastrategies-tout-en-un/</code>
-          <button class="ag-cfg-btn ag-cfg-btn-outline" onclick="agCopyRedirectUri()" title="Copier l'URI">📋 Copier</button>
+        <div style="margin-top:8px;padding:10px 12px;background:#fffde7;border:2px solid #f9a825;border-radius:2px;">
+          <div style="font-size:11px;font-weight:bold;color:#333;word-break:break-all;font-family:'IBM Plex Mono',monospace;">https://marcpfr-creator.github.io/eastrategies-tout-en-un/</div>
+          <button class="ag-cfg-btn ag-cfg-btn-outline" onclick="agCopyRedirectUri()" style="margin-top:8px;">📋 Copier l'URI</button>
         </div>
         <div class="ag-cfg-actions" style="margin-top:10px;">
           <button class="ag-cfg-btn ag-cfg-btn-primary" id="ag-btn-gcal-connect" onclick="plSyncGCal()">🔗 Connecter Google</button>
