@@ -3911,6 +3911,7 @@ function renderAgenda(){
     <div><div class="pl-title">Planning <span>Semaine</span></div></div>
     <div class="pl-header-right">
       <button class="pl-btn" onclick="plGoToday()">📍 Aujourd'hui</button>
+      <button class="pl-btn" id="pl-ical-btn" onclick="plSyncICal()" title="Importer depuis Calendrier Apple (iCloud)">📱 iCal</button>
       <button class="pl-btn" onclick="plSyncGCal()">🔄 Sync GCal</button>
       <button class="pl-btn" onclick="plDisconnectGCal()" title="Déconnecter Google Calendar">🔓 GCal</button>
       <button class="pl-btn" onclick="plImportCalPub()" title="Importer le calendrier éditorial">📋 Cal. Pub</button>
@@ -4202,19 +4203,8 @@ async function gcalFetchEvents(){
     }));
     calEvents=allEvents;
     localStorage.setItem('gcalEvents',JSON.stringify(calEvents));
-    // ─── DIAGNOSTIC TEMPORAIRE ───────────────────────────────────
-    const calNames=calendars.map(c=>c.summary).join(', ');
-    const evSample=calEvents.slice(0,3).map(e=>e.start_time.substring(0,10)+' '+e.title).join('\n');
-    const plDaysCur=plDays(plWKey).map(d=>d.date);
-    alert('📅 GCal Diagnostic\n\n'
-      +'Calendriers ('+calendars.length+') : '+calNames+'\n'
-      +'Événements trouvés : '+calEvents.length+'\n'
-      +(evSample?'Premiers:\n'+evSample+'\n':'')+'\n'
-      +'Semaine affichée : '+plWKey+'\n'
-      +'Dates ('+plDaysCur[0]+' → '+plDaysCur[6]+')');
-    // ─────────────────────────────────────────────────────────────
     console.log('[GCal] '+calEvents.length+' événements chargés depuis '+calendars.length+' calendriers');
-  }catch(e){console.error('[GCal]',e);alert('Erreur GCal: '+e.message);}
+  }catch(e){console.error('[GCal]',e);}
 }
 
 async function plSyncGCal(){
@@ -4300,6 +4290,63 @@ function plMergeGCal(){
     });
   });
 }
+
+// ─── ICAL (APPLE CALENDAR / iCLOUD) ──────────────────────────────
+function _dtLocal(d){
+  if(!d||isNaN(d))return'';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
+    +'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+}
+function plMergeAllICal(evs){
+  if(!evs||!evs.length)return;
+  const weeks=new Set();
+  evs.forEach(ev=>{if(ev.start_time)weeks.add(plISO(new Date(ev.start_time.substring(0,10)+'T12:00:00')));});
+  weeks.forEach(wk=>{
+    const days=plDays(wk);
+    evs.forEach(ev=>{
+      if(!ev.start_time)return;
+      const d=ev.start_time.substring(0,10);
+      const di=days.findIndex(day=>day.date===d);if(di<0)return;
+      const cu=PLS.cu(wk,di);if(cu.some(c=>c._cid===ev.event_id))return;
+      const sh=ev.start_time.substring(11,16).replace(':','h'),eh=ev.end_time?ev.end_time.substring(11,16).replace(':','h'):'';
+      const tLabel=sh&&sh!=='00h00'?(sh+(eh&&eh!=='00h00'?'–'+eh:'')):'';
+      cu.push({t:tLabel,title:ev.title||'Événement',sub:'📱 Calendrier Apple',cat:'rdv',ico:'📅',_cid:ev.event_id});
+      PLS.saveCu(wk,di,cu);
+    });
+  });
+}
+async function plSyncICal(){
+  const btn=document.getElementById('pl-ical-btn');
+  if(btn)btn.textContent='🔄 iCal…';
+  const url=(typeof ICAL_URL!=='undefined'?ICAL_URL:'').replace(/^webcal:/,'https:');
+  if(!url){alert('URL iCloud non configurée.');if(btn)btn.textContent='📱 iCal';return;}
+  let lastErr='';
+  for(let i=0;i<CORS_PROXIES.length;i++){
+    try{
+      const proxyUrl=CORS_PROXIES[i]+encodeURIComponent(url);
+      const res=await fetch(proxyUrl,{headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      const text=await res.text();
+      if(!text.includes('BEGIN:VCALENDAR'))throw new Error('Format invalide');
+      const icsEvs=parseICS(text);
+      const plEvs=icsEvs.map(ev=>({
+        event_id:ev.uid||('ical_'+Math.random().toString(36).slice(2)),
+        title:ev.summary||'Événement',
+        start_time:_dtLocal(ev.start),
+        end_time:ev.end?_dtLocal(ev.end):'',
+      }));
+      localStorage.setItem('icalEvents',JSON.stringify(plEvs));
+      plMergeAllICal(plEvs);
+      plRender();
+      if(btn)btn.textContent='✅ iCal ('+plEvs.length+')';
+      return;
+    }catch(e){lastErr=e.message;}
+  }
+  if(btn)btn.textContent='❌ iCal';
+  alert('Erreur iCal : '+lastErr);
+}
+// Recharger les events iCal au démarrage
+(function(){try{const s=localStorage.getItem('icalEvents');if(s){const evs=JSON.parse(s);if(evs&&evs.length){setTimeout(()=>{plMergeAllICal(evs);plRender();},300);}}}catch{}})();
 
 // ─── → MA JOURNÉE ────────────────────────────────────────────────
 function plToJ(wk,di,name,date){
