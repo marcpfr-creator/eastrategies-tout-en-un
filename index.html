@@ -3911,8 +3911,9 @@ function renderAgenda(){
     <div><div class="pl-title">Planning <span>Semaine</span></div></div>
     <div class="pl-header-right">
       <button class="pl-btn" onclick="plGoToday()">📍 Aujourd'hui</button>
+      <button class="pl-btn" id="pl-sync-all-btn" onclick="plSyncTout()" title="Sync Apple Calendar + Google Calendar">🔄 Sync Tout</button>
       <button class="pl-btn" id="pl-ical-btn" onclick="plSyncICal()" title="Importer depuis Calendrier Apple (iCloud)">📱 iCal</button>
-      <button class="pl-btn" onclick="plSyncGCal()">🔄 Sync GCal</button>
+      <button class="pl-btn" onclick="plSyncGCal()">🔄 GCal</button>
       <button class="pl-btn" onclick="plDisconnectGCal()" title="Déconnecter Google Calendar">🔓 GCal</button>
       <button class="pl-btn" onclick="plImportCalPub()" title="Importer le calendrier éditorial">📋 Cal. Pub</button>
       <div class="pl-week-nav">
@@ -4352,6 +4353,53 @@ async function plSyncICal(forcePrompt){
   }
   if(btn)btn.textContent='❌ iCal';
   alert('Erreur iCal : '+lastErr);
+}
+// ─── SYNC TOUT (Apple + Google) ──────────────────────────────────
+async function plSyncTout(){
+  const btn=document.getElementById('pl-sync-all-btn');
+  if(btn)btn.textContent='🔄 Sync…';
+  let total=0;
+  // 1. Apple Calendar (iCal)
+  try{
+    let url=(localStorage.getItem('ical_planning_url')||ICAL_PLANNING_URL).replace(/^webcal:/,'https:');
+    let fetched=false;
+    for(let i=0;i<CORS_PROXIES.length;i++){
+      try{
+        const res=await fetch(CORS_PROXIES[i]+encodeURIComponent(url),{headers:{'X-Requested-With':'XMLHttpRequest'}});
+        if(!res.ok)throw new Error('HTTP '+res.status);
+        const text=await res.text();
+        if(!text.includes('BEGIN:VCALENDAR'))throw new Error('Format invalide');
+        const icsEvs=parseICS(text);
+        const plEvs=icsEvs.map(ev=>({
+          event_id:ev.uid||('ical_'+Math.random().toString(36).slice(2)),
+          title:ev.summary||'Événement',
+          start_time:_dtLocal(ev.start),
+          end_time:ev.end?_dtLocal(ev.end):'',
+        }));
+        localStorage.setItem('icalEvents',JSON.stringify(plEvs));
+        plMergeAllICal(plEvs);
+        total+=plEvs.length;
+        fetched=true;
+        break;
+      }catch(e){}
+    }
+    if(!fetched)console.warn('[SyncTout] iCal échec');
+  }catch(e){console.error('[SyncTout] iCal',e);}
+  // 2. Google Calendar (si token présent)
+  if(gcalAccessToken){
+    try{
+      await gcalFetchEvents();
+      plMergeGCal();
+      total+=calEvents.length;
+    }catch(e){console.error('[SyncTout] GCal',e);}
+  }
+  plRender();
+  if(btn)btn.textContent='✅ Sync ('+total+')';
+  // Si pas de token GCal → proposer la connexion
+  if(!gcalAccessToken){
+    const connect=confirm('✅ Apple Calendar synchronisé ('+total+' événements)\n\nConnecte aussi Google Calendar ?');
+    if(connect) plSyncGCal();
+  }
 }
 // Recharger les events iCal au démarrage
 (function(){try{const s=localStorage.getItem('icalEvents');if(s){const evs=JSON.parse(s);if(evs&&evs.length){setTimeout(()=>{plMergeAllICal(evs);plRender();},300);}}}catch{}})();
