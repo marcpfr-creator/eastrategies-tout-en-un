@@ -808,6 +808,30 @@ header { padding-top: max(16px, env(safe-area-inset-top)); }
 .pl-walert{font-size:11px;padding:5px 10px;border-radius:4px;border-left:3px solid #FF6B00;background:#FFF3E0;color:#7C3600;margin-bottom:3px;grid-column:1/-1}
 .pl-walert.info{border-color:#1565C0;background:#E3EEFF;color:#0D3B80}
 .pl-wadd{grid-column:1/-1;display:flex;gap:6px;padding:4px 0}
+
+/* ── MODE LECTURE SEULE (iPad) ── */
+.readonly-banner {
+  display: none;
+  background: #ff6b35;
+  color: #fff;
+  text-align: center;
+  padding: 8px 16px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+}
+body.readonly-mode .readonly-banner { display: block; }
+body.readonly-mode .btn-primary { opacity: 0.3; pointer-events: none; cursor: not-allowed; }
+body.readonly-mode .icon-btn { opacity: 0.3; pointer-events: none; cursor: not-allowed; }
+body.readonly-mode .btn-danger { opacity: 0.3; pointer-events: none; cursor: not-allowed; }
+body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea {
+  pointer-events: none; background: #f5f5f5;
+}
+
 </style>
 <script>
 // ─── PKCE OAUTH CALLBACK (popup return handler) ──────────────────
@@ -844,6 +868,10 @@ header { padding-top: max(16px, env(safe-area-inset-top)); }
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
+<div class="readonly-banner" id="readonly-banner">
+  👁 MODE CONSULTATION — Modifications désactivées sur cet appareil
+  <button onclick="disableReadonly()" style="margin-left:16px;background:rgba(255,255,255,0.2);border:1px solid #fff;color:#fff;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:10px">Activer l'édition</button>
+</div>
 
 <!-- HEADER -->
 <header>
@@ -6401,6 +6429,32 @@ function syncImport(input) {
   };
   reader.readAsText(file, 'UTF-8');
 }
+
+// ── MODE LECTURE SEULE ──
+(function() {
+  const isIpad = /iPad|Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
+  const forceEdit = localStorage.getItem('erp_force_edit') === '1';
+  const forceReadonly = localStorage.getItem('erp_force_readonly') === '1';
+  
+  if ((isIpad && !forceEdit) || forceReadonly) {
+    document.body.classList.add('readonly-mode');
+  }
+})();
+
+function disableReadonly() {
+  localStorage.setItem('erp_force_edit', '1');
+  localStorage.removeItem('erp_force_readonly');
+  document.body.classList.remove('readonly-mode');
+  showToast('✓ Mode édition activé sur cet appareil');
+}
+
+function enableReadonly() {
+  localStorage.setItem('erp_force_readonly', '1');
+  localStorage.removeItem('erp_force_edit');
+  document.body.classList.add('readonly-mode');
+  showToast('👁 Mode consultation activé');
+}
+
 tpLoad();
 // Pré-remplir la date du jour
 (function(){
