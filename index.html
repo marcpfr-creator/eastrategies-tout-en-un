@@ -4210,8 +4210,17 @@ async function gcalFetchEvents(){
     }));
     calEvents=allEvents;
     localStorage.setItem('gcalEvents',JSON.stringify(calEvents));
+    // ─── DIAGNOSTIC ─────────────────────────────────────────────
+    try{
+      const meResp=await fetch('https://www.googleapis.com/oauth2/v1/userinfo',{headers});
+      const me=await meResp.json();
+      const calNames=calendars.map(c=>c.summary||c.id).join(', ');
+      const sample=calEvents.slice(0,4).map(e=>e.start_time.substring(0,10)+' '+e.title).join('\n')||'(aucun)';
+      const range=tMin.toISOString().substring(0,10)+' → '+tMax.toISOString().substring(0,10);
+      alert('📅 GCal Diagnostic\n\nCompte : '+(me.email||'?')+'\nCalendriers ('+calendars.length+'): '+calNames+'\nPériode : '+range+'\nÉvénements : '+calEvents.length+'\n\n'+sample);
+    }catch(de){alert('📅 GCal: '+calEvents.length+' événements ('+calendars.length+' calendriers)');}
+    // ────────────────────────────────────────────────────────────
     console.log('[GCal] TOTAL: '+calEvents.length+' événements');
-    if(!calEvents.length) alert('⚠️ Google Calendar : 0 événements trouvés.\nVérifie que tu es connecté au bon compte Google (celui avec tes RDV).');
   }catch(e){console.error('[GCal]',e);alert('Erreur GCal: '+e.message);}
 }
 
