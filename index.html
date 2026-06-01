@@ -4104,8 +4104,8 @@ const GCAL_CLIENT_ID='1034644588520-5461t8kughc8g3klhg7v30g89eelmqnd.apps.google
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 let gcalTokenClient=null;
 let gcalAccessToken=localStorage.getItem('gcalAccessToken')||null;
-let calEvents=[];
-try{calEvents=JSON.parse(localStorage.getItem('gcalEvents')||'[]');}catch{}
+// calEvents déjà déclaré dans le script précédent — on le réinitialise depuis localStorage si dispo
+try{const _ce=localStorage.getItem('gcalEvents');if(_ce)calEvents=JSON.parse(_ce);}catch{}
 
 function plInitGCal(){
   if(!window.google||!window.google.accounts){setTimeout(plInitGCal,500);return;}
