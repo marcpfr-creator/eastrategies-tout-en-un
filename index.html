@@ -809,7 +809,19 @@ header { padding-top: max(16px, env(safe-area-inset-top)); }
 .pl-walert.info{border-color:#1565C0;background:#E3EEFF;color:#0D3B80}
 .pl-wadd{grid-column:1/-1;display:flex;gap:6px;padding:4px 0}
 </style>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+// ─── PKCE OAUTH CALLBACK (popup return handler) ──────────────────
+(function(){
+  try{
+    var p=new URLSearchParams(window.location.search);
+    var code=p.get('code'),state=p.get('state');
+    if(code&&state&&state.startsWith('gcal_')&&window.opener&&!window.opener.closed){
+      window.opener.postMessage({type:'gcal_oauth_code',code:code},window.location.origin);
+      window.close();
+    }
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 
@@ -4100,29 +4112,38 @@ function plGCal(title,date,tr,desc){
   return'https://calendar.google.com/calendar/render?action=TEMPLATE&text='+encodeURIComponent(title)+'&dates='+fm(p[0])+'/'+fm(p[1]||p[0])+'&details='+encodeURIComponent(desc||'Eastrategies®');
 }
 
-// ─── GOOGLE CALENDAR OAUTH ───────────────────────────────────────
+// ─── GOOGLE CALENDAR OAUTH — PKCE ────────────────────────────────
 const GCAL_CLIENT_ID='1034644588520-5461t8kughc8g3klhg7v30g89eelmqnd.apps.googleusercontent.com';
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
-let gcalTokenClient=null;
 let gcalAccessToken=localStorage.getItem('gcalAccessToken')||null;
 // calEvents déjà déclaré dans le script précédent — on le réinitialise depuis localStorage si dispo
 try{const _ce=localStorage.getItem('gcalEvents');if(_ce)calEvents=JSON.parse(_ce);}catch{}
 
-function plInitGCal(){
-  if(!window.google||!window.google.accounts){setTimeout(plInitGCal,500);return;}
-  gcalTokenClient=google.accounts.oauth2.initTokenClient({
-    client_id:GCAL_CLIENT_ID,
-    scope:GCAL_SCOPE,
-    callback:async(resp)=>{
-      if(resp.error){alert('Erreur Google Calendar : '+resp.error);return;}
-      gcalAccessToken=resp.access_token;
-      localStorage.setItem('gcalAccessToken',gcalAccessToken);
-      await gcalFetchEvents();
-      plMergeGCal();plRender();
-      const btn=document.querySelector('.pl-btn[onclick*=plSyncGCal]');
-      if(btn)btn.textContent='✅ GCal connecté';
-    }
-  });
+function plInitGCal(){} // no-op — PKCE ne nécessite pas d'init
+
+function _gcalVerifier(){const arr=new Uint8Array(64);crypto.getRandomValues(arr);return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
+async function _gcalChallenge(v){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return btoa(String.fromCharCode(...new Uint8Array(h))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
+
+async function _gcalExchange(code){
+  try{
+    const verifier=sessionStorage.getItem('gcal_v');
+    const r=await fetch('https://oauth2.googleapis.com/token',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({
+        client_id:GCAL_CLIENT_ID,
+        code,
+        code_verifier:verifier,
+        grant_type:'authorization_code',
+        redirect_uri:window.location.origin+window.location.pathname
+      })
+    });
+    const d=await r.json();
+    if(d.access_token){sessionStorage.removeItem('gcal_v');return d.access_token;}
+    console.error('[GCal] Token exchange failed:',d);
+    alert('Erreur GCal : '+(d.error_description||d.error||'Voir console'));
+    return null;
+  }catch(e){console.error('[GCal]',e);return null;}
 }
 
 async function gcalFetchEvents(){
@@ -4151,21 +4172,50 @@ async function gcalFetchEvents(){
   }catch(e){console.error('[GCal]',e);}
 }
 
-function plSyncGCal(){
+async function plSyncGCal(){
   const btn=document.querySelector('.pl-btn[onclick*=plSyncGCal]');
   // Si déjà un token valide → rafraîchir
   if(gcalAccessToken){
     if(btn)btn.textContent='🔄 Chargement…';
-    gcalFetchEvents().then(()=>{plMergeGCal();plRender();if(btn)btn.textContent='✅ GCal connecté';});
+    await gcalFetchEvents();
+    plMergeGCal();plRender();
+    if(btn)btn.textContent='✅ GCal connecté';
     return;
   }
-  // Sinon → OAuth popup
-  if(!gcalTokenClient)plInitGCal();
-  setTimeout(()=>{
-    if(!gcalTokenClient){alert('Google Identity Services non chargé. Rechargez la page.');return;}
-    if(btn)btn.textContent='🔄 Connexion…';
-    gcalTokenClient.requestAccessToken({prompt:'consent'});
-  },300);
+  // Sinon → PKCE OAuth popup (synchrone depuis gesture utilisateur)
+  const verifier=_gcalVerifier();
+  const challenge=await _gcalChallenge(verifier);
+  sessionStorage.setItem('gcal_v',verifier);
+  const authUrl='https://accounts.google.com/o/oauth2/v2/auth?'+new URLSearchParams({
+    client_id:GCAL_CLIENT_ID,
+    redirect_uri:window.location.origin+window.location.pathname,
+    response_type:'code',
+    scope:GCAL_SCOPE,
+    code_challenge:challenge,
+    code_challenge_method:'S256',
+    state:'gcal_'+Date.now(),
+    access_type:'online',
+    prompt:'consent'
+  });
+  const popup=window.open(authUrl,'gcal_auth','width=520,height=620');
+  if(!popup){alert('Popup bloquée — autorisez les popups pour ce site.');return;}
+  if(btn)btn.textContent='🔄 Connexion…';
+  const msgHandler=async function(evt){
+    if(evt.origin!==window.location.origin)return;
+    if(!evt.data||evt.data.type!=='gcal_oauth_code')return;
+    window.removeEventListener('message',msgHandler);
+    const tok=await _gcalExchange(evt.data.code);
+    if(tok){
+      gcalAccessToken=tok;
+      localStorage.setItem('gcalAccessToken',tok);
+      await gcalFetchEvents();
+      plMergeGCal();plRender();
+      if(btn)btn.textContent='✅ GCal connecté';
+    }else{
+      if(btn)btn.textContent='🔄 Sync GCal';
+    }
+  };
+  window.addEventListener('message',msgHandler);
 }
 
 function plMergeGCal(){
@@ -4350,10 +4400,8 @@ function plImportCalPub(){
 }
 
 // ─── INIT ────────────────────────────────────────────────────────
-// Initialiser GCal dès le chargement de la page (GIS asynchrone)
 window.addEventListener('load', function(){
-  plInitGCal();
-  // Mettre à jour le label du bouton si déjà connecté
+  // Mettre à jour le label du bouton si déjà connecté (token en localStorage)
   const btn=document.querySelector('.pl-btn[onclick*=plSyncGCal]');
   if(btn&&gcalAccessToken)btn.textContent='✅ GCal connecté';
 });
