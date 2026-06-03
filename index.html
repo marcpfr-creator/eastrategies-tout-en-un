@@ -2138,12 +2138,19 @@ function load() {
 let sbInitialLoading = true;
 
 function save() {
+  const now = Date.now();
   if (sbInitialLoading) {
     // Sauvegarde locale uniquement pendant le chargement initial
-    try { localStorage.setItem(SK, JSON.stringify({prospects,factures,transactions,saved:new Date().toISOString()})); } catch(e) {}
+    try {
+      localStorage.setItem(SK, JSON.stringify({prospects,factures,transactions,saved:new Date().toISOString()}));
+      localStorage.setItem('main_saved_at', now.toString());
+    } catch(e) {}
     return;
   }
-  try { localStorage.setItem(SK, JSON.stringify({prospects,factures,transactions,saved:new Date().toISOString()})); }
+  try {
+    localStorage.setItem(SK, JSON.stringify({prospects,factures,transactions,saved:new Date().toISOString()}));
+    localStorage.setItem('main_saved_at', now.toString());
+  }
   catch(e) { showToast('⚠ Stockage plein'); return; }
   document.getElementById('last-save').textContent = `Sauvegardé ${new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}`;
   // Sync Supabase
@@ -2322,6 +2329,8 @@ function renderPipeline(){
     let relHtml=fmtDate(p.date_relance);
     if(days!==null){if(days<0)relHtml=`<span class="relance-late">⚠ ${fmtDate(p.date_relance)}</span>`;else if(days<=3)relHtml=`<span class="relance-soon">● ${fmtDate(p.date_relance)}</span>`;}
     const files=(p.files||[]).map((f,fi)=>`<div class="file-pill" onclick="downloadFile('prospect','${p.id}',${fi})">${fileIcon(f.name)}<span class="fp-name">${f.name}</span><span class="fp-del" onclick="event.stopPropagation();removeFile('prospect','${p.id}',${fi})">×</span></div>`).join('');
+    // PDF Supabase Storage
+    const sbPdfs=(p.pdf_files||[]).map((pf,pi)=>`<a href="${pf.url}" target="_blank" class="file-pill" style="text-decoration:none" title="${pf.name}">📎<span class="fp-name">${pf.name}</span><span class="fp-del" onclick="event.preventDefault();event.stopPropagation();prospectRemovePdf('${p.id}',${pi})">×</span></a>`).join('');
     return`<tr>
       <td style="color:var(--muted);font-size:10px;text-align:center">${p.id}</td>
       <td><strong>${p.entreprise}</strong>${p.contact?`<br><span style="font-size:10px;color:var(--muted)">${p.contact}</span>`:''}</td>
@@ -2333,7 +2342,7 @@ function renderPipeline(){
         <div class="dp-row"><span class="dp-lbl" title="Closing">C</span><div class="dp-bg"><div class="dp-fill" style="width:${p.proba||0}%;background:${pColor(p.proba||0)}"></div></div><span class="dp-val" style="color:${pColor(p.proba||0)}">${p.proba||0}%</span></div>
       </div></td>
       <td style="font-size:10px;text-align:center">${relHtml}</td>
-      <td><div class="file-pills">${files}<button class="add-file-btn" onclick="quickAddFile('prospect','${p.id}')">+📎</button></div></td>
+      <td><div class="file-pills">${files}${sbPdfs}<label class="add-file-btn" title="Joindre un PDF" style="cursor:pointer">+📎<input type="file" accept="application/pdf" style="display:none" onchange="prospectUploadPdf('${p.id}',this)"></label></div></td>
       <td style="font-size:10px">${p.responsable||'—'}</td>
       <td><div class="actions">
         <button class="icon-btn" onclick="showDetail('prospect','${p.id}')" title="Détails">👁</button>
@@ -2710,6 +2719,65 @@ function removeFile(ctx,id,fi){
   const item=arr.find(x=>x.id===id);if(!item||!item.files)return;
   item.files.splice(fi,1);save();
   if(ctx==='prospect')renderPipeline();else renderFacturation();
+}
+
+// Upload PDF vers Supabase Storage pour un prospect
+async function prospectUploadPdf(prospectId, input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const p = prospects.find(x => x.id === prospectId);
+  if (!p) return;
+  const fileName = 'prospect_' + prospectId + '_' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  try {
+    showToast('📤 Upload PDF en cours…');
+    const resp = await fetch(
+      SB_URL + '/storage/v1/object/task-pdfs/' + fileName,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': SB_KEY,
+          'Authorization': 'Bearer ' + SB_KEY,
+          'Content-Type': 'application/pdf',
+          'x-upsert': 'true'
+        },
+        body: file
+      }
+    );
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error('HTTP ' + resp.status + ' — ' + err);
+    }
+    if (!p.pdf_files) p.pdf_files = [];
+    p.pdf_files.push({
+      url: SB_URL + '/storage/v1/object/public/task-pdfs/' + fileName,
+      name: file.name
+    });
+    save();
+    renderPipeline();
+    showToast('✅ PDF joint : ' + file.name.substring(0, 30));
+  } catch(e) {
+    console.error('[PDF Prospect Upload]', e);
+    showToast('❌ Erreur upload PDF : ' + e.message.substring(0, 60));
+  }
+  input.value = '';
+}
+
+// Supprimer un PDF Supabase d'un prospect
+async function prospectRemovePdf(prospectId, pi) {
+  const p = prospects.find(x => x.id === prospectId);
+  if (!p || !p.pdf_files || !p.pdf_files[pi]) return;
+  const pf = p.pdf_files[pi];
+  const fileName = pf.url.split('/task-pdfs/').pop();
+  try {
+    await fetch(SB_URL + '/storage/v1/object/task-pdfs/' + fileName, {
+      method: 'DELETE',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+  } catch(e) { console.warn('[PDF Prospect Delete]', e); }
+  p.pdf_files.splice(pi, 1);
+  save();
+  renderPipeline();
+  showToast('🗑 PDF supprimé');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -6525,12 +6593,19 @@ async function sbLoadAll() {
     let changed = false;
     data.forEach(row => {
       if (row.key === 'main' && row.value) {
-        const d = row.value;
-        if (d.prospects)    prospects    = d.prospects;
-        if (d.factures)     factures     = d.factures;
-        if (d.transactions) transactions = d.transactions;
-        localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions}));
-        changed = true;
+        // Ne pas écraser si une version locale plus récente existe
+        const localTs = parseInt(localStorage.getItem('main_saved_at') || '0');
+        const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+        if (remoteTs >= localTs) {
+          const d = row.value;
+          if (d.prospects)    prospects    = d.prospects;
+          if (d.factures)     factures     = d.factures;
+          if (d.transactions) transactions = d.transactions;
+          localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions}));
+          changed = true;
+        } else {
+          console.log('[Sync] main local plus récent que Supabase — conservation locale');
+        }
       }
       if (row.key === 'tp_entries' && row.value) {
         tpEntries = row.value;
