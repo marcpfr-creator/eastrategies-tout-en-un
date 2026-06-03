@@ -6649,17 +6649,16 @@ function sbAutoSave() {
   if (el) el.textContent = 'Auto-sauvegardé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 }
 
-// Polling toutes les 30s pour sync entre appareils + auto-save toutes les 2 min
+// Chargement initial depuis Supabase au démarrage + auto-save toutes les 2 min
+// Le polling automatique (sbLoadAll toutes les 30s) a été supprimé car il écrasait
+// les modifications locales non encore synchronisées. Utiliser le bouton "↺ Sync" pour
+// forcer une synchronisation manuelle depuis un autre appareil.
 window.addEventListener('load', function() {
-  // Chargement initial depuis Supabase (prioritaire sur localStorage)
   sbStatus('↺ Chargement depuis le cloud…');
   sbLoadAll().then(() => {
-    // Après le premier chargement, lancer le polling
-    setInterval(sbLoadAll, 30000);   // sync depuis Supabase
     setInterval(sbAutoSave, 120000); // auto-save toutes les 2 min
   }).catch(() => {
-    sbInitialLoading = false; // Débloquer même en cas d'erreur
-    setInterval(sbLoadAll, 30000);
+    sbInitialLoading = false;
     setInterval(sbAutoSave, 120000);
   });
 });
