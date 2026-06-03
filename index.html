@@ -5872,7 +5872,9 @@ function twLoad() {
 }
 
 function twSave() {
+  const now = Date.now();
   localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+  localStorage.setItem('tw_tasks_saved_at', now.toString());
   if (!sbInitialLoading) sbPush('tw_tasks', twTasks);
   showToast('💾 Tâches sauvegardées');
 }
@@ -6016,19 +6018,20 @@ async function twDeleteDone() {
 function twAddInline(prio, input) {
   const text = (input.value||'').trim();
   if (!text) return;
-  twTasks.push({ id: twNextId(), text, prio, source: '', due: '', done: false, created: new Date().toISOString().split('T')[0] });
+  twTasks.push({ id: twNextId(), text, prio, source: '', due: '', done: false, created: new Date().toISOString().split('T')[0], pdf_url: null, pdf_name: null });
   input.value = '';
   twRender();
+  twSave();
 }
 
 function twToggle(id) {
   const t = twTasks.find(x => x.id === id);
-  if (t) { t.done = !t.done; twRender(); }
+  if (t) { t.done = !t.done; twRender(); twSave(); }
 }
 
 function twDelete(id) {
   twTasks = twTasks.filter(x => x.id !== id);
-  twRender();
+  twRender(); twSave();
 }
 
 function twCard(t) {
@@ -6513,7 +6516,7 @@ async function sbPush(key, value) {
 async function sbLoadAll() {
   try {
     sbStatus('↺ Chargement…');
-    const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,value', {
+    const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,value,updated_at', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     });
     if (!res.ok) { sbStatus('⚠ Erreur ' + res.status); return; }
@@ -6535,9 +6538,16 @@ async function sbLoadAll() {
         changed = true;
       }
       if (row.key === 'tw_tasks' && row.value) {
-        twTasks = row.value;
-        localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
-        changed = true;
+        // Ne pas écraser si une version locale plus récente existe
+        const localTs = parseInt(localStorage.getItem('tw_tasks_saved_at') || '0');
+        const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+        if (remoteTs >= localTs) {
+          twTasks = row.value;
+          localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+          changed = true;
+        } else {
+          console.log('[Sync] tw_tasks local plus récent que Supabase — conservation locale');
+        }
       }
     });
     if (changed) {
