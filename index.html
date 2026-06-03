@@ -3631,6 +3631,7 @@ function renderAgenda(){
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('tw-md-input').click()">📂 Charger Weekly</button>
     <input type="file" id="tw-md-input" accept=".md,.txt" style="display:none" onchange="twLoadMdFile(this)">
     <button class="btn btn-ghost btn-sm" onclick="twSyncFromData()">↺ Sync CRM</button>
+    <button class="btn btn-ghost btn-sm" style="color:#c62828;border-color:#c62828" onclick="twDeleteDone()">🗑 Vider terminées</button>
     <button class="btn btn-primary btn-sm" onclick="twSave()">💾 Sauvegarder</button>
   </div>
 </div>
@@ -3668,6 +3669,13 @@ function renderAgenda(){
   <div class="tw-qa-field" style="max-width:110px;">
     <div class="tw-qa-label">Heure</div>
     <input class="tw-qa-input" id="tw-newtime" type="time" placeholder="09:00">
+  </div>
+  <div class="tw-qa-field" style="max-width:140px;">
+    <div class="tw-qa-label">PDF joint</div>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <span class="add-file-btn" id="tw-newpdf-label">📎 Joindre PDF</span>
+      <input type="file" id="tw-newpdf" accept="application/pdf" style="display:none" onchange="twNewPdfSelected(this)">
+    </label>
   </div>
   <button class="btn btn-primary" onclick="twQuickAdd()">✚ Ajouter</button>
 </div>
@@ -5874,10 +5882,25 @@ function twNextId() {
   return 'TW' + String(max+1).padStart(3,'0');
 }
 
-function twQuickAdd() {
+// Fichier PDF en attente pour la prochaine tâche
+let _twPendingPdfFile = null;
+
+function twNewPdfSelected(input) {
+  const file = input.files && input.files[0];
+  const label = document.getElementById('tw-newpdf-label');
+  if (file) {
+    _twPendingPdfFile = file;
+    if (label) label.textContent = '✅ ' + file.name.substring(0, 20);
+  } else {
+    _twPendingPdfFile = null;
+    if (label) label.textContent = '📎 Joindre PDF';
+  }
+}
+
+async function twQuickAdd() {
   const text = (document.getElementById('tw-newtask').value||'').trim();
   if (!text) return;
-  twTasks.push({
+  const newTask = {
     id: twNextId(),
     text,
     prio: document.getElementById('tw-newprio').value || 'med',
@@ -5886,11 +5909,108 @@ function twQuickAdd() {
     time: document.getElementById('tw-newtime').value || '',
     done: false,
     created: new Date().toISOString().split('T')[0],
-  });
+    pdf_url: null,
+    pdf_name: null,
+  };
+  twTasks.push(newTask);
   document.getElementById('tw-newtask').value = '';
   document.getElementById('tw-newdue').value = '';
   document.getElementById('tw-newtime').value = '';
+  // Upload PDF si un fichier est en attente
+  if (_twPendingPdfFile) {
+    const file = _twPendingPdfFile;
+    _twPendingPdfFile = null;
+    const label = document.getElementById('tw-newpdf-label');
+    if (label) label.textContent = '📎 Joindre PDF';
+    document.getElementById('tw-newpdf').value = '';
+    await twUploadPdfForTask(newTask, file);
+  }
   twRender();
+  twSave();
+}
+
+// Upload PDF pour une tâche existante (depuis la carte)
+async function twUploadPdf(taskId, input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const t = twTasks.find(x => x.id === taskId);
+  if (!t) return;
+  await twUploadPdfForTask(t, file);
+  twRender();
+  twSave();
+}
+
+// Fonction centrale d'upload vers Supabase Storage
+async function twUploadPdfForTask(task, file) {
+  const fileName = task.id + '_' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  try {
+    showToast('📤 Upload PDF en cours…');
+    const resp = await fetch(
+      SB_URL + '/storage/v1/object/task-pdfs/' + fileName,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': SB_KEY,
+          'Authorization': 'Bearer ' + SB_KEY,
+          'Content-Type': 'application/pdf',
+          'x-upsert': 'true'
+        },
+        body: file
+      }
+    );
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error('HTTP ' + resp.status + ' — ' + err);
+    }
+    task.pdf_url = SB_URL + '/storage/v1/object/public/task-pdfs/' + fileName;
+    task.pdf_name = file.name;
+    showToast('✅ PDF joint : ' + file.name.substring(0, 30));
+  } catch(e) {
+    console.error('[PDF Upload]', e);
+    showToast('❌ Erreur upload PDF : ' + e.message.substring(0, 60));
+  }
+}
+
+// Supprimer le PDF d'une tâche
+async function twRemovePdf(taskId) {
+  const t = twTasks.find(x => x.id === taskId);
+  if (!t || !t.pdf_url) return;
+  // Extraire le nom du fichier depuis l'URL
+  const fileName = t.pdf_url.split('/task-pdfs/').pop();
+  try {
+    await fetch(SB_URL + '/storage/v1/object/task-pdfs/' + fileName, {
+      method: 'DELETE',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+  } catch(e) { console.warn('[PDF Delete]', e); }
+  t.pdf_url = null;
+  t.pdf_name = null;
+  twRender();
+  twSave();
+  showToast('🗑 PDF supprimé');
+}
+
+// Supprimer toutes les tâches terminées (+ leurs PDF)
+async function twDeleteDone() {
+  const done = twTasks.filter(x => x.done);
+  if (!done.length) { showToast('Aucune tâche terminée'); return; }
+  if (!confirm('Supprimer ' + done.length + ' tâche(s) terminée(s) ?\nLes PDF joints seront aussi supprimés.')) return;
+  // Supprimer les PDF dans Supabase Storage
+  for (const t of done) {
+    if (t.pdf_url) {
+      const fileName = t.pdf_url.split('/task-pdfs/').pop();
+      try {
+        await fetch(SB_URL + '/storage/v1/object/task-pdfs/' + fileName, {
+          method: 'DELETE',
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+        });
+      } catch(e) { console.warn('[PDF Delete]', e); }
+    }
+  }
+  twTasks = twTasks.filter(x => !x.done);
+  twRender();
+  twSave();
+  showToast('🗑 ' + done.length + ' tâche(s) terminée(s) supprimée(s)');
 }
 
 function twAddInline(prio, input) {
@@ -5914,20 +6034,30 @@ function twDelete(id) {
 function twCard(t) {
   const tagMap = { high:'rouge', med:'orange', low:'vert', prospect:'bleu', mission:'violet', admin:'orange' };
   const prioLabel = { high:'Urgent', med:'Semaine', low:'Plus tard' };
-  const srcLabel = t.source ? ' · ' + t.source : '';
   const dueLabel = t.due ? ' · 📅 ' + t.due.split('-').reverse().join('/') : '';
   const timeLabel = t.time ? ' · 🕐 ' + t.time : '';
-  return '<div class="tw-card'+(t.done?' done-card':'')+'" id="tw-'+t.id+'">' +
+  // Pièce jointe PDF
+  const pdfHtml = t.pdf_url
+    ? `<a href="${t.pdf_url}" target="_blank" class="file-pill" title="${t.pdf_name||'PDF'}" style="text-decoration:none;margin-top:4px">
+        <span>📎</span><span class="fp-name">${t.pdf_name||'PDF'}</span>
+        <span class="fp-del" onclick="event.preventDefault();event.stopPropagation();twRemovePdf('${t.id}')" title="Supprimer PDF">✕</span>
+       </a>`
+    : `<label class="add-file-btn" style="margin-top:4px;cursor:pointer" title="Joindre un PDF">
+        📎 PDF
+        <input type="file" accept="application/pdf" style="display:none" onchange="twUploadPdf('${t.id}',this)">
+       </label>`;
+  return '<div class="tw-card'+(t.done?' done-card':'')+' " id="tw-'+t.id+'">' +
     '<div class="tw-card-top">' +
-      '<div class="tw-card-chk'+(t.done?' done':'')+'" onclick="twToggle(\''+t.id+'\')">'+(t.done?'✓':'')+'</div>' +
+      '<div class="tw-card-chk'+(t.done?' done':'')+' " onclick="twToggle(\''+t.id+'\')">'+(t.done?'✓':'')+'</div>' +
       '<div class="tw-card-title">'+t.text+'</div>' +
       '<button class="wk-del-btn" onclick="twDelete(\''+t.id+'\')">✕</button>' +
     '</div>' +
     '<div class="tw-card-meta">' +
       '<span class="tw-tag tw-tag-'+tagMap[t.prio]+'">'+prioLabel[t.prio]+'</span>' +
-      (t.source ? '<span class="tw-tag tw-tag-'+tagMap[t.source]+' ">'+t.source+'</span>' : '') +
+      (t.source ? '<span class="tw-tag tw-tag-'+(tagMap[t.source]||'bleu')+'">'+t.source+'</span>' : '') +
       dueLabel + timeLabel +
     '</div>' +
+    pdfHtml +
   '</div>';
 }
 
