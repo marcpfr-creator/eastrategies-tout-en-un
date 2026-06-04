@@ -3434,31 +3434,88 @@ function parseICS(raw) {
       for(const p of patterns){const m=b.match(p);if(m)return m[1].trim().replace(/\\n/g,'\n').replace(/\\,/g,',').replace(/\\\\/g,'\\');}
       return '';
     };
-    const parseDate=(s)=>{
+    // Convertit une date ICS en heure locale Europe/Paris
+    const parseDateParis=(s)=>{
       if(!s)return null;
-      // TZID or VALUE=DATE cases
       s=s.replace(/\r/g,'');
-      if(s.length===8){// DATE only YYYYMMDD
+      // DATE uniquement YYYYMMDD — pas de conversion de fuseau
+      if(s.length===8){
         return new Date(s.substr(0,4)+'-'+s.substr(4,2)+'-'+s.substr(6,2)+'T00:00:00');
       }
       if(s.includes('T')){
         const y=s.substr(0,4),mo=s.substr(4,2),d=s.substr(6,2);
         const h=s.substr(9,2),mi=s.substr(11,2),sc=s.substr(13,2)||'00';
+        // Si UTC (se termine par Z) : convertir vers Europe/Paris
+        if(s.endsWith('Z')){
+          const utcDate = new Date(`${y}-${mo}-${d}T${h}:${mi}:${sc}Z`);
+          if(isNaN(utcDate))return null;
+          // Extraire les composantes en heure Paris
+          const fmt = new Intl.DateTimeFormat('fr-FR',{
+            timeZone:'Europe/Paris',
+            year:'numeric',month:'2-digit',day:'2-digit',
+            hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false
+          });
+          const parts = {};
+          fmt.formatToParts(utcDate).forEach(p=>{ if(p.type!=='literal')parts[p.type]=p.value; });
+          const hh = parts.hour==='24'?'00':parts.hour;
+          return new Date(`${parts.year}-${parts.month}-${parts.day}T${hh}:${parts.minute}:${parts.second}`);
+        }
+        // Heure locale (pas de Z, pas de TZID) — utiliser telle quelle
         return new Date(`${y}-${mo}-${d}T${h}:${mi}:${sc}`);
       }
       return new Date(s);
     };
-    // Get raw DTSTART with possible TZID
-    const dtStartRaw = (()=>{
-      const m=b.match(/DTSTART(?:;[^:]+)?:([^\r\n]+)/m);
-      return m?m[1].trim():'';
-    })();
-    const dtEndRaw = (()=>{
-      const m=b.match(/DTEND(?:;[^:]+)?:([^\r\n]+)/m);
-      return m?m[1].trim():'';
-    })();
-    const start=parseDate(dtStartRaw);
-    const end=parseDate(dtEndRaw);
+    const parseDate = parseDateParis;
+    // Extraire DTSTART avec son TZID éventuel
+    const dtStartLine = (()=>{ const m=b.match(/DTSTART((?:;[^:]+)?):([^\r\n]+)/m); return m?{params:m[1],val:m[2].trim()}:{params:'',val:''}; })();
+    const dtEndLine   = (()=>{ const m=b.match(/DTEND((?:;[^:]+)?):([^\r\n]+)/m);   return m?{params:m[1],val:m[2].trim()}:{params:'',val:''}; })();
+    const dtStartRaw = dtStartLine.val;
+    const dtEndRaw   = dtEndLine.val;
+    // Extraire TZID si présent (ex: ;TZID=Europe/Bucharest)
+    const getTzid = (params) => { const m = params.match(/TZID=([^;:]+)/); return m ? m[1] : null; };
+    const startTzid = getTzid(dtStartLine.params);
+    const endTzid   = getTzid(dtEndLine.params);
+    // Fonction de conversion TZID → Europe/Paris
+    const parseDateWithTzid = (s, tzid) => {
+      const d = parseDate(s);
+      if (!d || isNaN(d)) return d;
+      // Si TZID présent et différent de Europe/Paris, convertir
+      if (tzid && tzid !== 'Europe/Paris') {
+        // Reconstruire la date dans le fuseau source, puis convertir vers Paris
+        const y=s.substr(0,4),mo=s.substr(4,2),dy=s.substr(6,2);
+        const h=s.substr(9,2),mi=s.substr(11,2),sc=s.substr(13,2)||'00';
+        // Créer une représentation ISO dans le fuseau source
+        const isoLocal = `${y}-${mo}-${dy}T${h}:${mi}:${sc}`;
+        // Utiliser Temporal-like trick via Intl pour obtenir l'offset
+        try {
+          // Obtenir l'heure UTC correspondante via le fuseau source
+          const srcFmt = new Intl.DateTimeFormat('en-CA', {
+            timeZone: tzid, year:'numeric', month:'2-digit', day:'2-digit',
+            hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+          });
+          // Trouver l'offset en comparant l'heure locale source avec UTC
+          // On utilise une approche par itération binaire simplifiée
+          // Plus simple : parser comme UTC puis corriger l'offset
+          const utcGuess = new Date(isoLocal + 'Z');
+          const srcParts = {};
+          srcFmt.formatToParts(utcGuess).forEach(p=>{ if(p.type!=='literal')srcParts[p.type]=p.value; });
+          const srcLocal = `${srcParts.year}-${srcParts.month}-${srcParts.day}T${srcParts.hour==='24'?'00':srcParts.hour}:${srcParts.minute}:${srcParts.second}`;
+          const diffMs = new Date(isoLocal) - new Date(srcLocal);
+          const correctedUtc = new Date(utcGuess.getTime() + diffMs);
+          // Convertir vers Paris
+          const parisFmt = new Intl.DateTimeFormat('fr-FR', {
+            timeZone:'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit',
+            hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+          });
+          const pp = {};
+          parisFmt.formatToParts(correctedUtc).forEach(p=>{ if(p.type!=='literal')pp[p.type]=p.value; });
+          return new Date(`${pp.year}-${pp.month}-${pp.day}T${pp.hour==='24'?'00':pp.hour}:${pp.minute}:${pp.second}`);
+        } catch(e) { return d; }
+      }
+      return d;
+    };
+    const start = parseDateWithTzid(dtStartRaw, startTzid);
+    const end   = parseDateWithTzid(dtEndRaw,   endTzid);
     if(!start||isNaN(start))continue;
     const allDay=dtStartRaw.length===8;
     events.push({
