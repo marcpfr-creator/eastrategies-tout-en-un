@@ -6609,6 +6609,55 @@ if (!localStorage.getItem('tw_pubs_seeded_v1')) {
   localStorage.setItem('tw_pubs_seeded_v1', '1');
 }
 
+// Seed plan de lancement juin 2026
+function twSeedLancement() {
+  const today = new Date().toISOString().split('T')[0];
+  const lancement = [
+    // Cette semaine 4-7 juin
+    {text:'✉️ Signature email avec vignette', due:'2026-06-07', prio:'high', source:'marketing'},
+    {text:'🖼️ og:image demandé à Manus', due:'2026-06-07', prio:'high', source:'marketing'},
+    {text:'📱 Posts LinkedIn programmés Social Pilot', due:'2026-06-07', prio:'high', source:'marketing'},
+    // Dimanche 7 juin
+    {text:'🖼️ Cover LinkedIn (bannière Mockup 9)', due:'2026-06-07', prio:'high', source:'marketing'},
+    {text:'✅ Vérification finale lancement', due:'2026-06-07', prio:'high', source:'marketing'},
+    // Lundi 8 juin
+    {text:'🚀 Post LinkedIn lancement officiel', due:'2026-06-08', prio:'high', source:'marketing'},
+    {text:'📧 Emails perso (5-10 contacts)', due:'2026-06-08', prio:'high', source:'marketing'},
+    // Sem. 15 juin
+    {text:'💼 Post LinkedIn « Idée reçue n°1 »', due:'2026-06-15', prio:'medium', source:'marketing'},
+    {text:'⭐ Sollicitation avis ciblée', due:'2026-06-15', prio:'medium', source:'marketing'},
+    // Sem. 16-19 juin
+    {text:'📨 Préparation newsletter Mailjet 20 juin', due:'2026-06-16', prio:'medium', source:'marketing'},
+    {text:'📝 Compilation avis / retours pour la newsletter', due:'2026-06-19', prio:'medium', source:'marketing'},
+    // Samedi 20 juin
+    {text:'📩 Newsletter Mailjet envoyée', due:'2026-06-20', prio:'high', source:'marketing'},
+  ];
+  const existingTexts = new Set(twTasks.map(t => t.text.toLowerCase()));
+  let added = 0;
+  lancement.forEach(t => {
+    if (!existingTexts.has(t.text.toLowerCase())) {
+      twTasks.push({id:twNextId(), text:t.text, prio:t.prio, source:t.source, due:t.due, done:false, created:today});
+      existingTexts.add(t.text.toLowerCase());
+      added++;
+    }
+  });
+  if (added > 0) {
+    const now = Date.now();
+    localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+    localStorage.setItem('tw_tasks_saved_at', now.toString());
+    if (!sbInitialLoading) sbPush('tw_tasks', twTasks);
+    twRender();
+    showToast('✓ ' + added + ' tâches de lancement ajoutées');
+  }
+}
+if (!localStorage.getItem('tw_lancement_seeded_v1')) {
+  // Déclencher après le chargement Supabase pour ne pas écraser
+  setTimeout(() => {
+    twSeedLancement();
+    localStorage.setItem('tw_lancement_seeded_v1', '1');
+  }, 3000);
+}
+
 plSeed();
 
 // ─────────────────────────────────────────────
