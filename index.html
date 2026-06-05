@@ -940,12 +940,13 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
   <button class="tab-btn" onclick="switchTab('temps',this)">⏱ Temps Passé</button>
 </div>
 
-<!-- Barre sync iCloud -->
-<div style="background:#e3f2fd;border-bottom:2px solid #1565c0;padding:7px 24px;display:flex;align-items:center;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;">
-  <span style="color:#1565c0;font-weight:700;">☁ iCLOUD SYNC</span>
-  <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="sbLoadAll()">↺ Sync maintenant</button>
+<!-- Barre sync multi-appareils -->
+<div style="background:#e3f2fd;border-bottom:2px solid #1565c0;padding:7px 24px;display:flex;align-items:center;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;flex-wrap:wrap;">
+  <span style="color:#1565c0;font-weight:700;">☁ SYNC CLOUD</span>
+  <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="sbLoadAll(true);showToast('↺ Rechargement forcé depuis le cloud…')" title="Forcer le rechargement depuis Supabase (utile après modification sur un autre appareil)">↺ Forcer sync</button>
   <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="syncExport()">⬇ Backup JSON</button>
-  <span id="sync-status" style="color:#1565c0;font-size:10px;margin-left:8px;">Connexion…</span>
+  <span id="sync-status" style="color:#1565c0;font-size:10px;margin-left:8px;transition:color .3s">Connexion…</span>
+  <span style="color:#888;font-size:9px;margin-left:auto">Sync auto au retour de focus (iPad/iPhone/Mac)</span>
 </div>
 
 <!-- ═══════════════════════════════════════════ DASHBOARD ═══ -->
@@ -6621,64 +6622,92 @@ const SB_HEADERS = {
   'Content-Type': 'application/json'
 };
 
-function sbStatus(msg) {
+// ─── SYNC MULTI-APPAREILS ────────────────────────────────────────
+// Stratégie : push immédiat à chaque modification (avec timestamp ISO),
+// rechargement intelligent au retour de focus (visibilitychange + focus).
+// Seule la version la plus récente (comparée via updated_at Supabase) est appliquée.
+
+// Dernier timestamp connu de Supabase par clé
+let _sbRemoteTs = { main: 0, tw_tasks: 0, tp_entries: 0 };
+
+function sbStatus(msg, ok) {
   const el = document.getElementById('sync-status');
-  if (el) el.textContent = msg;
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = ok === false ? '#e53935' : ok === true ? '#00b87a' : '#1565c0';
 }
 
+// Push immédiat avec timestamp — retourne le timestamp ISO utilisé
 async function sbPush(key, value) {
+  const ts = new Date().toISOString();
   try {
     const res = await fetch(SB_URL + '/rest/v1/sync_data', {
       method: 'POST',
       headers: { ...SB_HEADERS, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ key, value, updated_at: new Date().toISOString() })
+      body: JSON.stringify({ key, value, updated_at: ts })
     });
-    if (res.ok) sbStatus('☁ Sync ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
-    else sbStatus('⚠ Erreur ' + res.status);
-  } catch(e) { sbStatus('⚠ Hors ligne'); }
+    if (res.ok) {
+      _sbRemoteTs[key] = new Date(ts).getTime();
+      sbStatus('☁ Syncé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
+    } else {
+      sbStatus('⚠ Erreur push ' + res.status, false);
+    }
+  } catch(e) { sbStatus('⚠ Hors ligne', false); }
+  return ts;
 }
 
-async function sbLoadAll() {
+// Charge depuis Supabase et applique uniquement si plus récent que local
+async function sbLoadAll(forceApply) {
   try {
-    sbStatus('↺ Chargement…');
+    sbStatus('↺ Sync…');
     const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,value,updated_at', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     });
-    if (!res.ok) { sbStatus('⚠ Erreur ' + res.status); return; }
+    if (!res.ok) { sbStatus('⚠ Erreur ' + res.status, false); return; }
     const data = await res.json();
-    if (!data || !data.length) { sbStatus('☁ Connecté — vide'); return; }
+    if (!data || !data.length) { sbStatus('☁ Connecté', true); return; }
     let changed = false;
     data.forEach(row => {
+      const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
       if (row.key === 'main' && row.value) {
-        // Ne pas écraser si une version locale plus récente existe
         const localTs = parseInt(localStorage.getItem('main_saved_at') || '0');
-        const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
-        if (remoteTs >= localTs) {
+        if (forceApply || remoteTs > localTs) {
           const d = row.value;
           if (d.prospects)    prospects    = d.prospects;
           if (d.factures)     factures     = d.factures;
           if (d.transactions) transactions = d.transactions;
           localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions}));
+          localStorage.setItem('main_saved_at', remoteTs.toString());
+          _sbRemoteTs.main = remoteTs;
           changed = true;
+          console.log('[Sync] main chargé depuis Supabase (remote:', new Date(remoteTs).toISOString(), '> local:', new Date(localTs).toISOString()+')');
         } else {
-          console.log('[Sync] main local plus récent que Supabase — conservation locale');
+          _sbRemoteTs.main = remoteTs;
         }
       }
       if (row.key === 'tp_entries' && row.value) {
-        tpEntries = row.value;
-        localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
-        changed = true;
-      }
-      if (row.key === 'tw_tasks' && row.value) {
-        // Ne pas écraser si une version locale plus récente existe
-        const localTs = parseInt(localStorage.getItem('tw_tasks_saved_at') || '0');
-        const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
-        if (remoteTs >= localTs) {
-          twTasks = row.value;
-          localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+        const localTs = parseInt(localStorage.getItem('tp_entries_saved_at') || '0');
+        if (forceApply || remoteTs > localTs) {
+          tpEntries = row.value;
+          localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
+          localStorage.setItem('tp_entries_saved_at', remoteTs.toString());
+          _sbRemoteTs.tp_entries = remoteTs;
           changed = true;
         } else {
-          console.log('[Sync] tw_tasks local plus récent que Supabase — conservation locale');
+          _sbRemoteTs.tp_entries = remoteTs;
+        }
+      }
+      if (row.key === 'tw_tasks' && row.value) {
+        const localTs = parseInt(localStorage.getItem('tw_tasks_saved_at') || '0');
+        if (forceApply || remoteTs > localTs) {
+          twTasks = row.value;
+          localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+          localStorage.setItem('tw_tasks_saved_at', remoteTs.toString());
+          _sbRemoteTs.tw_tasks = remoteTs;
+          changed = true;
+          console.log('[Sync] tw_tasks chargé depuis Supabase');
+        } else {
+          _sbRemoteTs.tw_tasks = remoteTs;
         }
       }
     });
@@ -6688,36 +6717,82 @@ async function sbLoadAll() {
       updateGlobalKPIs();
       populateClientSelects();
     }
-    sbStatus('☁ Synchronisé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
-  } catch(e) { sbStatus('⚠ Hors ligne'); }
-  finally {
-    // Débloquer save() après le premier chargement Supabase
+    sbStatus('☁ Syncé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
+  } catch(e) {
+    sbStatus('⚠ Hors ligne', false);
+    console.warn('[Sync] Erreur sbLoadAll:', e);
+  } finally {
     sbInitialLoading = false;
   }
 }
 
-// Sauvegarde silencieuse (sans toast)
+// Sync au retour de focus (changement d'onglet, réveil iPad/iPhone)
+// Charge uniquement si Supabase a une version plus récente
+async function sbSyncOnFocus() {
+  if (sbInitialLoading) return;
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,updated_at', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    let needLoad = false;
+    (data || []).forEach(row => {
+      const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+      const localTs = parseInt(localStorage.getItem((row.key === 'main' ? 'main' : row.key) + '_saved_at') || '0');
+      if (remoteTs > localTs + 2000) { // 2s de tolérance pour éviter les faux positifs
+        needLoad = true;
+        console.log('[Sync Focus] ' + row.key + ' plus récent sur Supabase — rechargement');
+      }
+    });
+    if (needLoad) {
+      sbStatus('↺ Mise à jour depuis un autre appareil…');
+      await sbLoadAll();
+      showToast('📱 Données mises à jour depuis un autre appareil');
+    }
+  } catch(e) { /* silencieux */ }
+}
+
+// Sauvegarde silencieuse de sécurité toutes les 2 min (filet de sécurité)
 function sbAutoSave() {
-  try { localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions, saved: new Date().toISOString()})); } catch(e) {}
+  const now = Date.now();
+  try {
+    localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions, saved: new Date().toISOString()}));
+    localStorage.setItem('main_saved_at', now.toString());
+  } catch(e) {}
   sbPush('main', {prospects, factures, transactions});
-  if (tpEntries && tpEntries.length) { localStorage.setItem('tp_entries', JSON.stringify(tpEntries)); sbPush('tp_entries', tpEntries); }
-  if (twTasks   && twTasks.length)   { localStorage.setItem('tw_tasks',   JSON.stringify(twTasks));   sbPush('tw_tasks',   twTasks);   }
+  if (tpEntries && tpEntries.length) {
+    localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
+    localStorage.setItem('tp_entries_saved_at', now.toString());
+    sbPush('tp_entries', tpEntries);
+  }
+  if (twTasks && twTasks.length) {
+    localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+    localStorage.setItem('tw_tasks_saved_at', now.toString());
+    sbPush('tw_tasks', twTasks);
+  }
   const el = document.getElementById('last-save');
   if (el) el.textContent = 'Auto-sauvegardé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 }
 
-// Chargement initial depuis Supabase au démarrage + auto-save toutes les 2 min
-// Le polling automatique (sbLoadAll toutes les 30s) a été supprimé car il écrasait
-// les modifications locales non encore synchronisées. Utiliser le bouton "↺ Sync" pour
-// forcer une synchronisation manuelle depuis un autre appareil.
+// Initialisation : chargement initial + événements de focus + auto-save
 window.addEventListener('load', function() {
   sbStatus('↺ Chargement depuis le cloud…');
   sbLoadAll().then(() => {
-    setInterval(sbAutoSave, 120000); // auto-save toutes les 2 min
+    // Auto-save de sécurité toutes les 2 min
+    setInterval(sbAutoSave, 120000);
   }).catch(() => {
     sbInitialLoading = false;
     setInterval(sbAutoSave, 120000);
   });
+});
+
+// Sync au retour de focus : visibilitychange (iPad/iPhone) + focus (Mac)
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible') sbSyncOnFocus();
+});
+window.addEventListener('focus', function() {
+  sbSyncOnFocus();
 });
 
 // ─────────────────────────────────────────────
@@ -6729,7 +6804,9 @@ function tpLoad() {
   try { tpEntries = JSON.parse(localStorage.getItem('tp_entries') || '[]'); } catch(e) { tpEntries = []; }
 }
 function tpSave() {
+  const now = Date.now();
   localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
+  localStorage.setItem('tp_entries_saved_at', now.toString());
   if (!sbInitialLoading) sbPush('tp_entries', tpEntries);
   showToast('💾 Temps sauvegardé');
 }
