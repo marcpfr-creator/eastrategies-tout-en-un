@@ -5,9 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Eastrategies">
+<meta name="apple-mobile-web-app-title" content="Eastrategies ERP">
 <meta name="theme-color" content="#0f0e0c">
 <meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="https://eastrategies.fr/wp-content/uploads/2024/01/logo-eastrategies-192.png">
+<script>
+  // Enregistrement du Service Worker (PWA offline)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').then(reg => {
+        console.log('[PWA] Service Worker enregistré', reg.scope);
+        // Détecter les mises à jour disponibles
+        reg.addEventListener('updatefound', () => {
+          const newSW = reg.installing;
+          newSW.addEventListener('statechange', () => {
+            if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+              if (confirm('🔄 Une mise à jour de l\'ERP est disponible. Recharger maintenant ?')) {
+                newSW.postMessage({ type: 'SKIP_WAITING' });
+                window.location.reload();
+              }
+            }
+          });
+        });
+      }).catch(err => console.warn('[PWA] Service Worker échec:', err));
+    });
+  }
+</script>
 <title>Eastrategies® — Gestion Commerciale & Finance</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -4884,6 +4908,28 @@ function plRDay(dayInfo,wk,di){
   cuSorted.forEach(({b,ci})=>{bHtml+=plRBl(b,`${wk}_d${di}_c${ci}`,wk,di,ci,date);});
   if(isToday)plRollover().forEach(b=>{bHtml+=`<div class="pl-block cat-todo"><div class="pl-block-main"><span class="pl-block-icon">📌</span><div class="pl-block-info"><div class="pl-block-time">${b.t}</div><div class="pl-block-title">${b.title}</div><div class="pl-block-sub">${b.sub}</div></div></div></div>`;});
 
+  // ── TÂCHES DU JOUR (twTasks avec due === date) ──
+  if(typeof twTasks !== 'undefined') {
+    const dayTasks = twTasks.filter(t => t.due === date && !t.done);
+    const dayDone  = twTasks.filter(t => t.due === date && t.done);
+    if(dayTasks.length > 0 || dayDone.length > 0) {
+      bHtml += `<div style="border-top:1px dashed var(--border);margin:4px 0 2px;padding-top:4px;font-size:9px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">✓ Tâches du jour</div>`;
+      dayTasks.forEach(t => {
+        const prioColor = t.prio==='high'?'#e53935':t.prio==='medium'?'#ff6d00':'#888';
+        bHtml += `<div class="pl-block" style="background:#fffde7;border-left:3px solid ${prioColor};cursor:pointer" onclick="twTogglePl('${t.id}')" title="Cliquer pour marquer comme fait">`
+          + `<div class="pl-block-main"><span class="pl-block-icon">☐</span>`
+          + `<div class="pl-block-info"><div class="pl-block-title" style="font-size:11px">${t.text}</div>`
+          + (t.hour?`<div class="pl-block-time">${t.hour}</div>`:'')
+          + `</div></div></div>`;
+      });
+      dayDone.forEach(t => {
+        bHtml += `<div class="pl-block" style="background:#f1f8e9;border-left:3px solid #aaa;opacity:.6;cursor:pointer" onclick="twTogglePl('${t.id}')" title="Cliquer pour réouvrir">`
+          + `<div class="pl-block-main"><span class="pl-block-icon">☑</span>`
+          + `<div class="pl-block-info"><div class="pl-block-title" style="font-size:11px;text-decoration:line-through;color:#888">${t.text}</div></div></div></div>`;
+      });
+    }
+  }
+
   const settF=`<div class="pl-day-settings" id="plds_${wk}_${di}"><div class="pl-edit-row"><input class="pl-edit-in" style="flex:1" data-f="sub" placeholder="Sous-titre" value="${sub.replace(/"/g,'&quot;')}"><input class="pl-edit-in" style="max-width:70px" data-f="badge" placeholder="Badge" value="${badge.replace(/"/g,'&quot;')}"></div><div class="pl-edit-row">${plHeadSel(head)}</div><div class="pl-edit-row" style="gap:10px;align-items:center;font-size:11px"><label><input type="checkbox" data-f="off" ${isOff?'checked':''}> OFF</label><label><input type="checkbox" data-f="partial" ${isPart?'checked':''}> PM seulement</label></div><div class="pl-edit-acts"><button class="pl-e-save" onclick="plDSSave('${wk}',${di})">💾</button><button class="pl-e-cancel" onclick="plDSShow('${wk}',${di})">✗</button></div></div>`;
 
   const addF=!isOff?`<button class="pl-add-btn" onclick="plAddShow('${wk}',${di})">+ Ajouter un bloc</button><div class="pl-add-wrap" id="pladd_${wk}_${di}"><div class="pl-edit-row"><input class="pl-edit-in" data-f="t" placeholder="9h00–10h00"><input class="pl-edit-in" style="max-width:40px" data-f="ico" placeholder="📌">${plCatSel('autre')}</div><div class="pl-edit-row"><input class="pl-edit-in" style="flex:1" data-f="title" placeholder="Titre *"></div><div class="pl-edit-row"><input class="pl-edit-in" style="flex:1" data-f="sub" placeholder="Sous-titre"></div><div class="pl-edit-acts"><button class="pl-e-save" onclick="plAddSave('${wk}',${di})">+ Ajouter</button><button class="pl-e-cancel" onclick="plAddShow('${wk}',${di})">✗</button></div></div>`:'';
@@ -6153,6 +6199,16 @@ function twAddInline(prio, input) {
 function twToggle(id) {
   const t = twTasks.find(x => x.id === id);
   if (t) { t.done = !t.done; twRender(); twSave(); }
+}
+
+// Bascule une tâche depuis le Planning Semaine et rafraîchit les deux vues
+function twTogglePl(id) {
+  const t = twTasks.find(x => x.id === id);
+  if (!t) return;
+  t.done = !t.done;
+  twSave();
+  twRender();
+  if (typeof plRender === 'function') plRender();
 }
 
 function twDelete(id) {
