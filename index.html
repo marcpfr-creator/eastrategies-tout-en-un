@@ -6650,13 +6650,7 @@ function twSeedLancement() {
     showToast('✓ ' + added + ' tâches de lancement ajoutées');
   }
 }
-if (!localStorage.getItem('tw_lancement_seeded_v1')) {
-  // Déclencher après le chargement Supabase pour ne pas écraser
-  setTimeout(() => {
-    twSeedLancement();
-    localStorage.setItem('tw_lancement_seeded_v1', '1');
-  }, 3000);
-}
+// Le seed lancement est déclenché APRÈS sbLoadAll (voir window load ci-dessous)
 
 plSeed();
 
@@ -6824,14 +6818,24 @@ function sbAutoSave() {
   if (el) el.textContent = 'Auto-sauvegardé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 }
 
-// Initialisation : chargement initial + événements de focus + auto-save
+// Initialisation : chargement initial + seed après Supabase + auto-save
 window.addEventListener('load', function() {
   sbStatus('↺ Chargement depuis le cloud…');
   sbLoadAll().then(() => {
+    // Seed plan de lancement APRÈS le chargement Supabase
+    if (!localStorage.getItem('tw_lancement_seeded_v1')) {
+      twSeedLancement();
+      localStorage.setItem('tw_lancement_seeded_v1', '1');
+    }
     // Auto-save de sécurité toutes les 2 min
     setInterval(sbAutoSave, 120000);
   }).catch(() => {
     sbInitialLoading = false;
+    // Seed même en cas d'erreur Supabase
+    if (!localStorage.getItem('tw_lancement_seeded_v1')) {
+      twSeedLancement();
+      localStorage.setItem('tw_lancement_seeded_v1', '1');
+    }
     setInterval(sbAutoSave, 120000);
   });
 });
