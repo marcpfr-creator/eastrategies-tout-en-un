@@ -4082,6 +4082,15 @@ function renderAgenda(){
 
 /* ═══ CRM PROJETS ═══ */
 .crm-wrap{padding:20px 16px;max-width:1400px;margin:0 auto}
+.crm-task-row{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:6px;background:#fafafa;border:1px solid var(--border);margin-bottom:5px;transition:background .15s}
+.crm-task-row.done{opacity:.55;background:#f0f0f0}
+.crm-task-row.overdue-task{background:#fff5f5;border-color:#ffcdd2}
+.crm-task-check{margin-top:3px;width:15px;height:15px;cursor:pointer;accent-color:var(--ink);flex-shrink:0}
+.crm-task-body{flex:1;min-width:0}
+.crm-task-text{font-size:12px;font-weight:600;color:var(--ink);display:block}
+.crm-task-text.done{text-decoration:line-through;color:var(--muted)}
+.crm-task-meta{display:flex;gap:10px;align-items:center;margin-top:2px;flex-wrap:wrap}
+.crm-task-prio{font-size:10px;font-weight:600}
 .crm-hero{background:var(--ink);color:var(--bg);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;border:1.5px solid var(--ink);box-shadow:var(--shadow-lg)}
 .crm-hero h2{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--accent)}
 .crm-alerts{margin-bottom:14px;display:flex;flex-direction:column;gap:6px}
@@ -7315,16 +7324,27 @@ function crmSyncToPipeline(proj) {
 // ── Alertes retard ────────────────────────────────────────
 function crmGetAlerts() {
   const alerts = [];
-  const today = new Date();
+  const today = new Date(); today.setHours(0,0,0,0);
   crmProjects.forEach(proj => {
     if (['signe','perdu'].includes(proj.stage)) return;
+    // Alertes d'activité
     const stage = CRM_STAGES.find(s => s.id === proj.stage);
-    if (!stage || !stage.delay) return;
-    const last = proj.last_activity ? new Date(proj.last_activity) : null;
-    if (!last) { alerts.push({ type: 'red', msg: `⚠ ${proj.company} — aucune activité enregistrée`, proj }); return; }
-    const days = Math.round((today - last) / 86400000);
-    if (days > stage.delay * 2) alerts.push({ type: 'red', msg: `🚨 ${proj.company} — ${days}j sans activité (étape : ${stage.label})`, proj });
-    else if (days > stage.delay) alerts.push({ type: 'yellow', msg: `⚠ ${proj.company} — ${days}j sans activité (étape : ${stage.label})`, proj });
+    if (stage && stage.delay) {
+      const last = proj.last_activity ? new Date(proj.last_activity) : null;
+      if (!last) { alerts.push({ type: 'red', msg: `⚠ ${proj.company} — aucune activité enregistrée`, proj }); }
+      else {
+        const days = Math.round((today - last) / 86400000);
+        if (days > stage.delay * 2) alerts.push({ type: 'red', msg: `🚨 ${proj.company} — ${days}j sans activité (étape : ${stage.label})`, proj });
+        else if (days > stage.delay) alerts.push({ type: 'yellow', msg: `⚠ ${proj.company} — ${days}j sans activité (étape : ${stage.label})`, proj });
+      }
+    }
+    // Alertes de tâches en retard
+    (proj.tasks || []).forEach(t => {
+      if (t.done || !t.due) return;
+      const due = new Date(t.due);
+      if (due < today) alerts.push({ type: 'red', msg: `🚨 Tâche en retard — ${proj.company} : « ${t.text} » (due le ${t.due})`, proj });
+      else if ((due - today) <= 86400000) alerts.push({ type: 'yellow', msg: `⏰ Tâche à faire aujourd'hui — ${proj.company} : « ${t.text} »`, proj });
+    });
   });
   return alerts;
 }
@@ -7353,9 +7373,15 @@ function crmRender() {
     { label: 'Pipeline €', val: new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(pipeline_val), color: '#c2185b' }
   ].map(k => `<div class="kpi"><div class="kpi-accent" style="background:${k.color}"></div><div class="kpi-label">${k.label}</div><div class="kpi-value" style="color:${k.color};font-size:15px">${k.val}</div></div>`).join('');
 
-  // Kanban
+  // Kanban (sans signés ni perdus)
+  const showArchives = document.getElementById('crm-show-archives') && document.getElementById('crm-show-archives').checked;
+  const activeStages = showArchives ? CRM_STAGES : CRM_STAGES.filter(s => !['signe','perdu'].includes(s.id));
+  const archivedCount = crmProjects.filter(p => ['signe','perdu'].includes(p.stage)).length;
+  // Mettre à jour le compteur archives
+  const archBtn = document.getElementById('crm-archives-btn');
+  if (archBtn) archBtn.textContent = showArchives ? '📂 Masquer archives' : `📂 Archives (${archivedCount})`;
   const kanban = document.getElementById('crm-kanban');
-  kanban.innerHTML = CRM_STAGES.map(stage => {
+  kanban.innerHTML = activeStages.map(stage => {
     const cards = crmProjects.filter(p => p.stage === stage.id);
     const today = new Date();
     const cardsHtml = cards.map(proj => {
@@ -7423,6 +7449,7 @@ function crmOpenModal(proj, defaultStage) {
       last_activity: new Date().toISOString().split('T')[0],
       contacts: [],
       history: [],
+      tasks: [],
       notes: '',
       pdf_files: []
     };
@@ -7500,6 +7527,17 @@ function crmOpenModal(proj, defaultStage) {
         <button class="btn btn-outline btn-sm" onclick="crmAddEvent()" style="align-self:flex-end">+ Ajouter</button>
       </div>
     </div>
+    <!-- Tâches liées au projet -->
+    <div>
+      <div class="crm-section-title">✅ Tâches du projet</div>
+      <div id="crm-tasks-list">${crmRenderTasksList(proj.tasks || [])}</div>
+      <div class="crm-add-event" style="margin-top:8px">
+        <div class="crm-field" style="flex:3"><label class="crm-label">Tâche</label><input class="crm-input" id="crm-task-text" placeholder="Ex : Envoyer devis, Relancer M. Dupont…"></div>
+        <div class="crm-field" style="flex:1"><label class="crm-label">Échéance</label><input class="crm-input" id="crm-task-due" type="date"></div>
+        <div class="crm-field" style="flex:1"><label class="crm-label">Priorité</label><select class="crm-select" id="crm-task-prio"><option value="haute">🔴 Haute</option><option value="moyenne" selected>🟡 Moyenne</option><option value="basse">🟢 Basse</option></select></div>
+        <button class="btn btn-outline btn-sm" onclick="crmAddTask()" style="align-self:flex-end">+ Ajouter</button>
+      </div>
+    </div>
     <!-- Notes -->
     <div>
       <div class="crm-section-title">Notes & Demandes</div>
@@ -7538,6 +7576,79 @@ function crmSetStage(stageId, btn) {
   btn.classList.add('active');
   btn.style.background = stage ? stage.color : '';
   btn.style.color = '#fff';
+}
+
+// ── Tâches projet ────────────────────────────────────────
+function crmRenderTasksList(tasks) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (!tasks || tasks.length === 0) return '<div style="color:var(--muted);font-size:11px;padding:6px 0">Aucune tâche pour ce projet</div>';
+  return tasks.map((t, i) => {
+    const due = t.due ? new Date(t.due) : null;
+    const overdue = due && !t.done && due < today;
+    const dueToday = due && !t.done && due.getTime() === today.getTime();
+    const dueSoon = due && !t.done && !overdue && !dueToday && (due - today) <= 2 * 86400000;
+    const prioColors = { haute: '#e53935', moyenne: '#f9a825', basse: '#43a047' };
+    const prioColor = prioColors[t.prio] || '#999';
+    let dueLabel = '';
+    if (due) {
+      if (overdue) dueLabel = `<span style="color:#e53935;font-weight:600">⚠ ${t.due} (en retard)</span>`;
+      else if (dueToday) dueLabel = `<span style="color:#ff6f00;font-weight:600">⏰ Aujourd'hui</span>`;
+      else if (dueSoon) dueLabel = `<span style="color:#f9a825;font-weight:600">⏳ ${t.due}</span>`;
+      else dueLabel = `<span style="color:var(--muted)">${t.due}</span>`;
+    }
+    return `<div class="crm-task-row ${t.done ? 'done' : ''} ${overdue ? 'overdue-task' : ''}">
+      <input type="checkbox" class="crm-task-check" ${t.done ? 'checked' : ''} onchange="crmToggleTask(${i})">
+      <div class="crm-task-body">
+        <span class="crm-task-text ${t.done ? 'done' : ''}">${t.text || ''}</span>
+        <div class="crm-task-meta">
+          <span class="crm-task-prio" style="color:${prioColor}">${t.prio === 'haute' ? '🔴' : t.prio === 'moyenne' ? '🟡' : '🟢'} ${t.prio}</span>
+          ${dueLabel}
+        </div>
+      </div>
+      <button class="crm-hist-del" onclick="crmDeleteTask(${i})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function crmAddTask() {
+  if (!window._crmCurrentProj) return;
+  const text = document.getElementById('crm-task-text').value.trim();
+  if (!text) { showToast('⚠ Décrivez la tâche'); return; }
+  window._crmCurrentProj.tasks = window._crmCurrentProj.tasks || [];
+  window._crmCurrentProj.tasks.push({
+    id: 'T' + Date.now(),
+    text,
+    due: document.getElementById('crm-task-due').value || '',
+    prio: document.getElementById('crm-task-prio').value,
+    done: false
+  });
+  document.getElementById('crm-tasks-list').innerHTML = crmRenderTasksList(window._crmCurrentProj.tasks);
+  document.getElementById('crm-task-text').value = '';
+  document.getElementById('crm-task-due').value = '';
+}
+
+function crmToggleTask(idx) {
+  if (!window._crmCurrentProj) return;
+  window._crmCurrentProj.tasks[idx].done = !window._crmCurrentProj.tasks[idx].done;
+  document.getElementById('crm-tasks-list').innerHTML = crmRenderTasksList(window._crmCurrentProj.tasks);
+}
+
+function crmDeleteTask(idx) {
+  if (!window._crmCurrentProj) return;
+  window._crmCurrentProj.tasks.splice(idx, 1);
+  document.getElementById('crm-tasks-list').innerHTML = crmRenderTasksList(window._crmCurrentProj.tasks);
+}
+
+// ── Toggle Archives ──────────────────────────────────────
+function crmToggleArchives() {
+  let chk = document.getElementById('crm-show-archives');
+  if (!chk) {
+    chk = document.createElement('input');
+    chk.type = 'checkbox'; chk.id = 'crm-show-archives'; chk.style.display = 'none';
+    document.body.appendChild(chk);
+  }
+  chk.checked = !chk.checked;
+  crmRender();
 }
 
 function crmAddContact() {
@@ -7714,6 +7825,7 @@ tpLoad();
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary btn-sm" onclick="crmNewProject()">+ Nouveau projet</button>
         <button class="btn btn-outline btn-sm" onclick="crmSyncFromPipeline()">↺ Sync Pipeline</button>
+        <button class="btn btn-outline btn-sm" id="crm-archives-btn" onclick="crmToggleArchives()">📂 Archives (0)</button>
       </div>
     </div>
     <!-- Alertes retard -->
