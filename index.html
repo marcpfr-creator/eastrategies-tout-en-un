@@ -962,6 +962,7 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
   <button class="tab-btn" onclick="switchTab('weekly',this)">📓 Weekly</button>
   <button class="tab-btn" onclick="switchTab('planning',this)">📅 Planning Semaine</button>
   <button class="tab-btn" onclick="switchTab('temps',this)">⏱ Temps Passé</button>
+  <button class="tab-btn" onclick="switchTab('crm',this)">🎯 CRM Projets</button>
 </div>
 
 <!-- Barre sync multi-appareils -->
@@ -2237,6 +2238,7 @@ function switchTab(name,btn){
   if(name==='weekly')   { /* load panel visible by default */ }
   if(name==='planning') { plRender(); }
   if(name==='temps')    { tpRender(); }
+  if(name==='crm')      { crmRender(); }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -4077,6 +4079,77 @@ function renderAgenda(){
 .tp-table th{background:var(--ink);color:var(--bg);padding:8px 10px;text-align:left;font-family:'Syne',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;}
 .tp-table td{padding:7px 10px;border-bottom:1px solid var(--border);}
 .tp-table tr:hover td{background:var(--card);}
+
+/* ═══ CRM PROJETS ═══ */
+.crm-wrap{padding:20px 16px;max-width:1400px;margin:0 auto}
+.crm-hero{background:var(--ink);color:var(--bg);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;border:1.5px solid var(--ink);box-shadow:var(--shadow-lg)}
+.crm-hero h2{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--accent)}
+.crm-alerts{margin-bottom:14px;display:flex;flex-direction:column;gap:6px}
+.crm-alert{background:#fff3e0;border:1.5px solid #ff6d00;border-radius:6px;padding:8px 14px;font-size:11px;display:flex;align-items:center;gap:8px}
+.crm-alert.red{background:#ffebee;border-color:#e53935}
+.crm-alert.yellow{background:#fffde7;border-color:#f9a825}
+.crm-kanban{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:start}
+@media(max-width:1100px){.crm-kanban{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.crm-kanban{grid-template-columns:repeat(2,1fr)}}
+.crm-col{background:var(--card);border:1.5px solid var(--border);border-radius:8px;overflow:hidden;min-height:200px}
+.crm-col-head{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--border)}
+.crm-col-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:800;letter-spacing:-.3px}
+.crm-col-count{font-size:10px;background:rgba(0,0,0,.08);padding:2px 7px;border-radius:10px;font-weight:700}
+.crm-col-body{padding:8px;display:flex;flex-direction:column;gap:6px;min-height:120px}
+.crm-card{background:#fff;border:1.5px solid var(--border);border-radius:6px;padding:10px 12px;cursor:pointer;transition:box-shadow .15s,transform .1s;position:relative}
+.crm-card:hover{box-shadow:var(--shadow);transform:translate(-1px,-1px)}
+.crm-card.overdue{border-color:#e53935;background:#fff5f5}
+.crm-card.warning{border-color:#ff6d00;background:#fff8f0}
+.crm-card-company{font-family:'Syne',sans-serif;font-size:12px;font-weight:800;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crm-card-contact{font-size:10px;color:var(--muted);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crm-card-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.crm-card-amount{font-size:11px;font-weight:700;color:var(--green)}
+.crm-card-days{font-size:10px;padding:2px 6px;border-radius:10px;font-weight:700}
+.crm-card-days.ok{background:#e8f5e9;color:#2e7d32}
+.crm-card-days.warn{background:#fff3e0;color:#e65100}
+.crm-card-days.late{background:#ffebee;color:#c62828}
+.crm-card-indicator{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%}
+.crm-add-btn{width:100%;background:transparent;border:1.5px dashed var(--border);border-radius:6px;padding:8px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'IBM Plex Mono',monospace;transition:all .15s;margin-top:4px}
+.crm-add-btn:hover{border-color:var(--ink);color:var(--ink);background:var(--bg)}
+/* Modal fiche projet */
+.crm-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.crm-modal{background:var(--bg);border:2px solid var(--ink);box-shadow:var(--shadow-lg);width:100%;max-width:780px;border-radius:4px;animation:slideUp .2s ease}
+@keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+.crm-modal-head{background:var(--ink);color:var(--bg);padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+.crm-modal-head h3{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--accent)}
+.crm-modal-close{background:transparent;border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 10px;cursor:pointer;font-size:14px;border-radius:3px}
+.crm-modal-body{padding:20px;display:flex;flex-direction:column;gap:16px}
+.crm-section-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:8px}
+.crm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.crm-grid2{grid-template-columns:1fr}}
+.crm-field{display:flex;flex-direction:column;gap:3px}
+.crm-label{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.crm-input{font-family:'IBM Plex Mono',monospace;font-size:11px;border:1.5px solid var(--border);background:#fff;padding:7px 10px;outline:none;color:var(--ink);border-radius:3px;width:100%}
+.crm-input:focus{border-color:var(--ink)}
+.crm-select{font-family:'IBM Plex Mono',monospace;font-size:11px;border:1.5px solid var(--border);background:#fff;padding:7px 10px;outline:none;color:var(--ink);border-radius:3px;width:100%;cursor:pointer}
+.crm-textarea{font-family:'IBM Plex Mono',monospace;font-size:11px;border:1.5px solid var(--border);background:#fff;padding:7px 10px;outline:none;color:var(--ink);border-radius:3px;width:100%;resize:vertical;min-height:70px}
+/* Contacts liés */
+.crm-contacts-list{display:flex;flex-direction:column;gap:6px}
+.crm-contact-row{background:#fff;border:1px solid var(--border);border-radius:5px;padding:8px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.crm-contact-name{font-weight:700;font-size:11px;min-width:120px}
+.crm-contact-detail{font-size:10px;color:var(--muted);flex:1}
+.crm-contact-del{background:transparent;border:none;color:#e53935;cursor:pointer;font-size:14px;padding:0 4px}
+/* Historique */
+.crm-history{display:flex;flex-direction:column;gap:0}
+.crm-hist-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.crm-hist-item:last-child{border-bottom:none}
+.crm-hist-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;margin-top:1px}
+.crm-hist-content{flex:1;min-width:0}
+.crm-hist-meta{font-size:9px;color:var(--muted);margin-bottom:2px}
+.crm-hist-text{font-size:11px;line-height:1.5}
+.crm-hist-del{background:transparent;border:none;color:#ccc;cursor:pointer;font-size:12px;padding:0 4px;flex-shrink:0}
+.crm-hist-del:hover{color:#e53935}
+/* Add event form */
+.crm-add-event{background:#f8f6f0;border:1px solid var(--border);border-radius:5px;padding:10px 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.crm-stage-btns{display:flex;gap:6px;flex-wrap:wrap}
+.crm-stage-btn{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:5px 10px;border:1.5px solid var(--border);background:transparent;cursor:pointer;border-radius:3px;transition:all .15s;white-space:nowrap}
+.crm-stage-btn.active{color:#fff;border-color:transparent}
+.crm-stage-btn:hover{opacity:.8}
 </style>
 
 <div class="tp-hero">
@@ -7095,8 +7168,9 @@ function syncImport(input) {
       if (data.transactions) localStorage.setItem('transactions', JSON.stringify(data.transactions));
       if (data.tp_entries)   localStorage.setItem('tp_entries',   JSON.stringify(data.tp_entries));
       if (data.tw_tasks)     localStorage.setItem('tw_tasks',     JSON.stringify(data.tw_tasks));
+      if (data.crm_projects) localStorage.setItem('crm_projects', JSON.stringify(data.crm_projects));
       // Recharger toutes les données en mémoire
-      load(); tpLoad(); twLoad();
+      load(); tpLoad(); twLoad(); crmLoad();
       renderDashboard(); renderPipeline(); renderFacturation(); renderTresorerie(); tpRender(); twRender();
       const s = document.getElementById('sync-status');
       if (s) s.textContent = '✓ Importé — ' + (data.prospects||[]).length + ' prospects, ' + (data.factures||[]).length + ' factures';
@@ -7134,6 +7208,490 @@ function enableReadonly() {
   showToast('👁 Mode consultation activé');
 }
 
+// ═══════════════════════════════════════════════════════
+//  CRM PROJETS & CONTACTS
+// ═══════════════════════════════════════════════════════
+
+// Étapes du processus CRM (alimentent le Pipeline)
+const CRM_STAGES = [
+  { id: 'premier_contact', label: 'Premier contact', color: '#1a1aff', icon: '👋', delay: 7 },
+  { id: 'qualification',   label: 'Qualification',   color: '#b8860b', icon: '🔍', delay: 7 },
+  { id: 'devis_envoye',    label: 'Devis envoyé',    color: '#ff4d00', icon: '📄', delay: 7 },
+  { id: 'negociation',     label: 'Négociation',     color: '#c2185b', icon: '🤝', delay: 5 },
+  { id: 'signe',           label: 'Contrat signé',   color: '#2e7d32', icon: '✅', delay: null },
+  { id: 'perdu',           label: 'Perdu',           color: '#9e9e9e', icon: '❌', delay: null }
+];
+
+// Mapping CRM stage → Pipeline statut
+const CRM_TO_PIPELINE = {
+  'premier_contact': 'Premier contact',
+  'qualification':   'Prospect',
+  'devis_envoye':    'Devis envoyé',
+  'negociation':     'En négociation',
+  'signe':           'Devis accepté',
+  'perdu':           'Perdu'
+};
+
+// Types d'événements dans l'historique
+const CRM_EVENT_TYPES = [
+  { id: 'appel',    label: 'Appel',    icon: '📞', bg: '#e3f2fd' },
+  { id: 'email',    label: 'Email',    icon: '✉️',  bg: '#f3e5f5' },
+  { id: 'reunion',  label: 'Réunion',  icon: '🤝', bg: '#e8f5e9' },
+  { id: 'devis',    label: 'Devis',    icon: '📄', bg: '#fff3e0' },
+  { id: 'relance',  label: 'Relance',  icon: '🔔', bg: '#fce4ec' },
+  { id: 'note',     label: 'Note',     icon: '📝', bg: '#f5f5f5' }
+];
+
+let crmProjects = [];
+let crmEditId = null;
+
+// ── Chargement / Sauvegarde ──────────────────────────────
+function crmLoad() {
+  try { crmProjects = JSON.parse(localStorage.getItem('crm_projects') || '[]'); } catch(e) { crmProjects = []; }
+}
+
+function crmSave() {
+  const now = Date.now();
+  try {
+    localStorage.setItem('crm_projects', JSON.stringify(crmProjects));
+    localStorage.setItem('crm_saved_at', now.toString());
+  } catch(e) { showToast('⚠ Stockage plein'); return; }
+  sbPush('crm', { crm_projects: crmProjects });
+  showToast('💾 CRM sauvegardé');
+}
+
+// ── Sync depuis Pipeline (prospects → CRM) ───────────────
+function crmSyncFromPipeline() {
+  let added = 0;
+  prospects.forEach(p => {
+    const exists = crmProjects.find(c => c.pipeline_id === p.id);
+    if (!exists) {
+      const stageMap = {
+        'Premier contact': 'premier_contact',
+        'Prospect':        'qualification',
+        'Devis envoyé':    'devis_envoye',
+        'En négociation':  'negociation',
+        'Devis accepté':   'signe',
+        'Perdu':           'perdu'
+      };
+      crmProjects.push({
+        id: 'CRM' + Date.now() + Math.random().toString(36).slice(2,6),
+        pipeline_id: p.id,
+        company: p.entreprise || '',
+        stage: stageMap[p.statut] || 'premier_contact',
+        amount: p.montant || 0,
+        proba: p.proba || 0,
+        responsable: p.responsable || '',
+        source: p.source || '',
+        last_activity: new Date().toISOString().split('T')[0],
+        contacts: p.contact ? [{ id: 'C1', name: p.contact, role: '', email: p.email || '', phone: p.telephone || '' }] : [],
+        history: [],
+        notes: p.notes || '',
+        pdf_files: []
+      });
+      added++;
+    }
+  });
+  if (added > 0) { crmSave(); crmRender(); showToast(`✅ ${added} projet(s) importé(s) depuis le Pipeline`); }
+  else showToast('ℹ Tous les prospects sont déjà dans le CRM');
+}
+
+// ── Sync vers Pipeline (CRM → prospects) ─────────────────
+function crmSyncToPipeline(proj) {
+  if (!proj.pipeline_id) return;
+  const p = prospects.find(x => x.id === proj.pipeline_id);
+  if (!p) return;
+  p.statut = CRM_TO_PIPELINE[proj.stage] || p.statut;
+  p.montant = proj.amount || p.montant;
+  p.proba = proj.proba || p.proba;
+  if (proj.contacts && proj.contacts.length > 0) {
+    p.contact = proj.contacts[0].name || p.contact;
+    p.email = proj.contacts[0].email || p.email;
+    p.telephone = proj.contacts[0].phone || p.telephone;
+  }
+  save();
+}
+
+// ── Alertes retard ────────────────────────────────────────
+function crmGetAlerts() {
+  const alerts = [];
+  const today = new Date();
+  crmProjects.forEach(proj => {
+    if (['signe','perdu'].includes(proj.stage)) return;
+    const stage = CRM_STAGES.find(s => s.id === proj.stage);
+    if (!stage || !stage.delay) return;
+    const last = proj.last_activity ? new Date(proj.last_activity) : null;
+    if (!last) { alerts.push({ type: 'red', msg: `⚠ ${proj.company} — aucune activité enregistrée`, proj }); return; }
+    const days = Math.round((today - last) / 86400000);
+    if (days > stage.delay * 2) alerts.push({ type: 'red', msg: `🚨 ${proj.company} — ${days}j sans activité (étape : ${stage.label})`, proj });
+    else if (days > stage.delay) alerts.push({ type: 'yellow', msg: `⚠ ${proj.company} — ${days}j sans activité (étape : ${stage.label})`, proj });
+  });
+  return alerts;
+}
+
+// ── Rendu principal ───────────────────────────────────────
+function crmRender() {
+  crmLoad();
+  // Alertes
+  const alertsEl = document.getElementById('crm-alerts');
+  const alerts = crmGetAlerts();
+  alertsEl.innerHTML = alerts.length === 0 ? '' :
+    alerts.map(a => `<div class="crm-alert ${a.type}" onclick="crmOpenProject('${a.proj.id}')" style="cursor:pointer">${a.msg}</div>`).join('');
+
+  // KPIs
+  const kpisEl = document.getElementById('crm-kpis');
+  const total = crmProjects.length;
+  const actifs = crmProjects.filter(p => !['signe','perdu'].includes(p.stage)).length;
+  const signes = crmProjects.filter(p => p.stage === 'signe').length;
+  const perdus = crmProjects.filter(p => p.stage === 'perdu').length;
+  const pipeline_val = crmProjects.filter(p => !['signe','perdu'].includes(p.stage)).reduce((s,p) => s + (p.amount||0), 0);
+  kpisEl.innerHTML = [
+    { label: 'Total projets', val: total, color: '#1a1aff' },
+    { label: 'En cours', val: actifs, color: '#ff4d00' },
+    { label: 'Signés', val: signes, color: '#2e7d32' },
+    { label: 'Perdus', val: perdus, color: '#9e9e9e' },
+    { label: 'Pipeline €', val: new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(pipeline_val), color: '#c2185b' }
+  ].map(k => `<div class="kpi"><div class="kpi-accent" style="background:${k.color}"></div><div class="kpi-label">${k.label}</div><div class="kpi-value" style="color:${k.color};font-size:15px">${k.val}</div></div>`).join('');
+
+  // Kanban
+  const kanban = document.getElementById('crm-kanban');
+  kanban.innerHTML = CRM_STAGES.map(stage => {
+    const cards = crmProjects.filter(p => p.stage === stage.id);
+    const today = new Date();
+    const cardsHtml = cards.map(proj => {
+      const last = proj.last_activity ? new Date(proj.last_activity) : null;
+      const days = last ? Math.round((today - last) / 86400000) : 999;
+      const stageConf = CRM_STAGES.find(s => s.id === proj.stage);
+      const isOverdue = stageConf && stageConf.delay && days > stageConf.delay * 2;
+      const isWarn = stageConf && stageConf.delay && days > stageConf.delay && !isOverdue;
+      const contact = proj.contacts && proj.contacts.length > 0 ? proj.contacts[0].name : '';
+      const amountStr = proj.amount ? new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(proj.amount) : '';
+      let daysClass = 'ok', daysLabel = '';
+      if (days < 999) {
+        daysLabel = days === 0 ? "auj." : `${days}j`;
+        daysClass = isOverdue ? 'late' : isWarn ? 'warn' : 'ok';
+      }
+      return `<div class="crm-card ${isOverdue?'overdue':isWarn?'warning':''}" onclick="crmOpenProject('${proj.id}')">
+        <div class="crm-card-indicator" style="background:${stage.color}"></div>
+        <div class="crm-card-company">${proj.company || '—'}</div>
+        ${contact ? `<div class="crm-card-contact">${contact}</div>` : ''}
+        <div class="crm-card-meta">
+          ${amountStr ? `<span class="crm-card-amount">${amountStr}</span>` : ''}
+          ${daysLabel ? `<span class="crm-card-days ${daysClass}">${daysLabel}</span>` : ''}
+          ${proj.proba ? `<span style="font-size:10px;color:var(--muted)">${proj.proba}%</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="crm-col">
+      <div class="crm-col-head" style="border-bottom-color:${stage.color}">
+        <span class="crm-col-title">${stage.icon} ${stage.label}</span>
+        <span class="crm-col-count">${cards.length}</span>
+      </div>
+      <div class="crm-col-body">
+        ${cardsHtml}
+        <button class="crm-add-btn" onclick="crmNewProjectInStage('${stage.id}')">+ Ajouter</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Nouveau projet ────────────────────────────────────────
+function crmNewProject() { crmOpenModal(null, 'premier_contact'); }
+function crmNewProjectInStage(stageId) { crmOpenModal(null, stageId); }
+
+// ── Ouvrir fiche projet ───────────────────────────────────
+function crmOpenProject(id) {
+  const proj = crmProjects.find(p => p.id === id);
+  if (!proj) return;
+  crmOpenModal(proj, proj.stage);
+}
+
+// ── Modal fiche projet ────────────────────────────────────
+function crmOpenModal(proj, defaultStage) {
+  crmEditId = proj ? proj.id : null;
+  const isNew = !proj;
+  if (isNew) {
+    proj = {
+      id: 'CRM' + Date.now(),
+      pipeline_id: null,
+      company: '',
+      stage: defaultStage || 'premier_contact',
+      amount: 0,
+      proba: 0,
+      responsable: '',
+      source: '',
+      last_activity: new Date().toISOString().split('T')[0],
+      contacts: [],
+      history: [],
+      notes: '',
+      pdf_files: []
+    };
+  }
+
+  document.getElementById('crm-modal-title').textContent = isNew ? '+ Nouveau Projet' : proj.company || 'Fiche Projet';
+
+  const stageButtonsHtml = CRM_STAGES.map(s =>
+    `<button class="crm-stage-btn ${proj.stage === s.id ? 'active' : ''}" style="${proj.stage === s.id ? 'background:'+s.color : ''}" onclick="crmSetStage('${s.id}',this)">${s.icon} ${s.label}</button>`
+  ).join('');
+
+  const contactsHtml = (proj.contacts || []).map((c, i) =>
+    `<div class="crm-contact-row">
+      <span class="crm-contact-name">${c.name || '—'}</span>
+      <span class="crm-contact-detail">${[c.role, c.email, c.phone].filter(Boolean).join(' · ')}</span>
+      <button class="crm-contact-del" onclick="crmDeleteContact(${i})">✕</button>
+    </div>`
+  ).join('');
+
+  const histHtml = [...(proj.history || [])].reverse().map((h, i) => {
+    const et = CRM_EVENT_TYPES.find(e => e.id === h.type) || CRM_EVENT_TYPES[5];
+    const realIdx = (proj.history.length - 1) - i;
+    return `<div class="crm-hist-item">
+      <div class="crm-hist-dot" style="background:${et.bg}">${et.icon}</div>
+      <div class="crm-hist-content">
+        <div class="crm-hist-meta">${h.date || ''} · ${et.label}${h.author ? ' · '+h.author : ''}</div>
+        <div class="crm-hist-text">${h.text || ''}</div>
+      </div>
+      <button class="crm-hist-del" onclick="crmDeleteHistory(${realIdx})">✕</button>
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);font-size:11px;padding:8px 0">Aucun échange enregistré</div>';
+
+  const eventTypesHtml = CRM_EVENT_TYPES.map(et =>
+    `<option value="${et.id}">${et.icon} ${et.label}</option>`
+  ).join('');
+
+  document.getElementById('crm-modal-body').innerHTML = `
+    <!-- Étape -->
+    <div>
+      <div class="crm-section-title">Étape du projet</div>
+      <div class="crm-stage-btns" id="crm-stage-btns">${stageButtonsHtml}</div>
+    </div>
+    <!-- Infos générales -->
+    <div>
+      <div class="crm-section-title">Informations générales</div>
+      <div class="crm-grid2">
+        <div class="crm-field"><label class="crm-label">Société / Prospect</label><input class="crm-input" id="crm-f-company" value="${escHtml(proj.company)}" placeholder="Nom de la société"></div>
+        <div class="crm-field"><label class="crm-label">Responsable</label><input class="crm-input" id="crm-f-resp" value="${escHtml(proj.responsable)}" placeholder="Responsable"></div>
+        <div class="crm-field"><label class="crm-label">Montant estimé (€)</label><input class="crm-input" id="crm-f-amount" type="number" value="${proj.amount || ''}" placeholder="0"></div>
+        <div class="crm-field"><label class="crm-label">Probabilité (%)</label><input class="crm-input" id="crm-f-proba" type="number" min="0" max="100" value="${proj.proba || ''}" placeholder="0"></div>
+        <div class="crm-field"><label class="crm-label">Source</label><input class="crm-input" id="crm-f-source" value="${escHtml(proj.source)}" placeholder="LinkedIn, Partenaire…"></div>
+        <div class="crm-field"><label class="crm-label">Dernière activité</label><input class="crm-input" id="crm-f-last" type="date" value="${proj.last_activity || ''}"></div>
+      </div>
+    </div>
+    <!-- Contacts -->
+    <div>
+      <div class="crm-section-title">Contacts liés</div>
+      <div class="crm-contacts-list" id="crm-contacts-list">${contactsHtml}</div>
+      <div class="crm-add-event" style="margin-top:8px">
+        <div class="crm-field" style="flex:2"><label class="crm-label">Nom</label><input class="crm-input" id="crm-nc-name" placeholder="Prénom Nom"></div>
+        <div class="crm-field" style="flex:1"><label class="crm-label">Poste</label><input class="crm-input" id="crm-nc-role" placeholder="Directeur…"></div>
+        <div class="crm-field" style="flex:2"><label class="crm-label">Email</label><input class="crm-input" id="crm-nc-email" placeholder="email@…"></div>
+        <div class="crm-field" style="flex:1"><label class="crm-label">Tél.</label><input class="crm-input" id="crm-nc-phone" placeholder="+33…"></div>
+        <button class="btn btn-outline btn-sm" onclick="crmAddContact()" style="align-self:flex-end">+ Ajouter</button>
+      </div>
+    </div>
+    <!-- Historique -->
+    <div>
+      <div class="crm-section-title">Historique des échanges</div>
+      <div class="crm-history" id="crm-history">${histHtml}</div>
+      <div class="crm-add-event" style="margin-top:8px">
+        <div class="crm-field"><label class="crm-label">Type</label><select class="crm-select" id="crm-ev-type" style="min-width:110px">${eventTypesHtml}</select></div>
+        <div class="crm-field"><label class="crm-label">Date</label><input class="crm-input" id="crm-ev-date" type="date" value="${new Date().toISOString().split('T')[0]}" style="min-width:120px"></div>
+        <div class="crm-field" style="flex:3"><label class="crm-label">Description</label><input class="crm-input" id="crm-ev-text" placeholder="Résumé de l'échange…"></div>
+        <button class="btn btn-outline btn-sm" onclick="crmAddEvent()" style="align-self:flex-end">+ Ajouter</button>
+      </div>
+    </div>
+    <!-- Notes -->
+    <div>
+      <div class="crm-section-title">Notes & Demandes</div>
+      <textarea class="crm-textarea" id="crm-f-notes" rows="4" placeholder="Besoins exprimés, contraintes, points clés…">${escHtml(proj.notes)}</textarea>
+    </div>
+    <!-- Actions -->
+    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border)">
+      ${!isNew ? `<button class="btn btn-outline btn-sm" style="color:#e53935;border-color:#e53935" onclick="crmDeleteProject('${proj.id}')">🗑 Supprimer</button>` : ''}
+      <button class="btn btn-outline btn-sm" onclick="crmCloseModal()">Annuler</button>
+      <button class="btn btn-primary btn-sm" onclick="crmSaveModal(${isNew})">💾 Enregistrer</button>
+    </div>
+  `;
+
+  // Stocker le projet en cours d'édition
+  window._crmCurrentProj = JSON.parse(JSON.stringify(proj));
+  document.getElementById('crm-modal').style.display = 'flex';
+}
+
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function crmCloseModal() {
+  document.getElementById('crm-modal').style.display = 'none';
+  window._crmCurrentProj = null;
+  crmEditId = null;
+}
+
+function crmSetStage(stageId, btn) {
+  if (!window._crmCurrentProj) return;
+  window._crmCurrentProj.stage = stageId;
+  document.querySelectorAll('.crm-stage-btn').forEach(b => {
+    b.classList.remove('active');
+    b.style.background = '';
+    b.style.color = '';
+  });
+  const stage = CRM_STAGES.find(s => s.id === stageId);
+  btn.classList.add('active');
+  btn.style.background = stage ? stage.color : '';
+  btn.style.color = '#fff';
+}
+
+function crmAddContact() {
+  if (!window._crmCurrentProj) return;
+  const name = document.getElementById('crm-nc-name').value.trim();
+  if (!name) { showToast('⚠ Nom du contact requis'); return; }
+  window._crmCurrentProj.contacts = window._crmCurrentProj.contacts || [];
+  window._crmCurrentProj.contacts.push({
+    id: 'C' + Date.now(),
+    name,
+    role: document.getElementById('crm-nc-role').value.trim(),
+    email: document.getElementById('crm-nc-email').value.trim(),
+    phone: document.getElementById('crm-nc-phone').value.trim()
+  });
+  // Rafraîchir la liste contacts dans le modal
+  const list = document.getElementById('crm-contacts-list');
+  list.innerHTML = window._crmCurrentProj.contacts.map((c, i) =>
+    `<div class="crm-contact-row">
+      <span class="crm-contact-name">${c.name}</span>
+      <span class="crm-contact-detail">${[c.role, c.email, c.phone].filter(Boolean).join(' · ')}</span>
+      <button class="crm-contact-del" onclick="crmDeleteContact(${i})">✕</button>
+    </div>`
+  ).join('');
+  ['crm-nc-name','crm-nc-role','crm-nc-email','crm-nc-phone'].forEach(id => document.getElementById(id).value = '');
+}
+
+function crmDeleteContact(idx) {
+  if (!window._crmCurrentProj) return;
+  window._crmCurrentProj.contacts.splice(idx, 1);
+  const list = document.getElementById('crm-contacts-list');
+  list.innerHTML = window._crmCurrentProj.contacts.map((c, i) =>
+    `<div class="crm-contact-row">
+      <span class="crm-contact-name">${c.name}</span>
+      <span class="crm-contact-detail">${[c.role, c.email, c.phone].filter(Boolean).join(' · ')}</span>
+      <button class="crm-contact-del" onclick="crmDeleteContact(${i})">✕</button>
+    </div>`
+  ).join('');
+}
+
+function crmAddEvent() {
+  if (!window._crmCurrentProj) return;
+  const text = document.getElementById('crm-ev-text').value.trim();
+  if (!text) { showToast('⚠ Description requise'); return; }
+  window._crmCurrentProj.history = window._crmCurrentProj.history || [];
+  window._crmCurrentProj.history.push({
+    id: 'H' + Date.now(),
+    type: document.getElementById('crm-ev-type').value,
+    date: document.getElementById('crm-ev-date').value,
+    text,
+    author: ''
+  });
+  window._crmCurrentProj.last_activity = document.getElementById('crm-ev-date').value;
+  // Rafraîchir l'historique
+  const histEl = document.getElementById('crm-history');
+  const hist = [...window._crmCurrentProj.history].reverse();
+  histEl.innerHTML = hist.map((h, i) => {
+    const et = CRM_EVENT_TYPES.find(e => e.id === h.type) || CRM_EVENT_TYPES[5];
+    const realIdx = (window._crmCurrentProj.history.length - 1) - i;
+    return `<div class="crm-hist-item">
+      <div class="crm-hist-dot" style="background:${et.bg}">${et.icon}</div>
+      <div class="crm-hist-content">
+        <div class="crm-hist-meta">${h.date || ''} · ${et.label}</div>
+        <div class="crm-hist-text">${h.text}</div>
+      </div>
+      <button class="crm-hist-del" onclick="crmDeleteHistory(${realIdx})">✕</button>
+    </div>`;
+  }).join('');
+  document.getElementById('crm-ev-text').value = '';
+}
+
+function crmDeleteHistory(idx) {
+  if (!window._crmCurrentProj) return;
+  window._crmCurrentProj.history.splice(idx, 1);
+  const hist = [...window._crmCurrentProj.history].reverse();
+  const histEl = document.getElementById('crm-history');
+  histEl.innerHTML = hist.map((h, i) => {
+    const et = CRM_EVENT_TYPES.find(e => e.id === h.type) || CRM_EVENT_TYPES[5];
+    const realIdx = (window._crmCurrentProj.history.length - 1) - i;
+    return `<div class="crm-hist-item">
+      <div class="crm-hist-dot" style="background:${et.bg}">${et.icon}</div>
+      <div class="crm-hist-content">
+        <div class="crm-hist-meta">${h.date || ''} · ${et.label}</div>
+        <div class="crm-hist-text">${h.text}</div>
+      </div>
+      <button class="crm-hist-del" onclick="crmDeleteHistory(${realIdx})">✕</button>
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);font-size:11px;padding:8px 0">Aucun échange enregistré</div>';
+}
+
+function crmSaveModal(isNew) {
+  if (!window._crmCurrentProj) return;
+  const proj = window._crmCurrentProj;
+  // Lire les champs du formulaire
+  proj.company     = document.getElementById('crm-f-company').value.trim();
+  proj.responsable = document.getElementById('crm-f-resp').value.trim();
+  proj.amount      = parseFloat(document.getElementById('crm-f-amount').value) || 0;
+  proj.proba       = parseInt(document.getElementById('crm-f-proba').value) || 0;
+  proj.source      = document.getElementById('crm-f-source').value.trim();
+  proj.last_activity = document.getElementById('crm-f-last').value;
+  proj.notes       = document.getElementById('crm-f-notes').value.trim();
+
+  if (!proj.company) { showToast('⚠ Nom de la société requis'); return; }
+
+  if (isNew) {
+    // Créer aussi dans le Pipeline
+    const newPipelineId = nextProspectId();
+    proj.pipeline_id = newPipelineId;
+    prospects.push({
+      id: newPipelineId,
+      entreprise: proj.company,
+      contact: proj.contacts && proj.contacts.length > 0 ? proj.contacts[0].name : '',
+      email: proj.contacts && proj.contacts.length > 0 ? proj.contacts[0].email : '',
+      telephone: proj.contacts && proj.contacts.length > 0 ? proj.contacts[0].phone : '',
+      source: proj.source,
+      statut: CRM_TO_PIPELINE[proj.stage] || 'Premier contact',
+      temperature: 'Froid',
+      num_devis: '',
+      date_devis: '',
+      date_relance: '',
+      responsable: proj.responsable,
+      notes: proj.notes,
+      montant: proj.amount,
+      proba: proj.proba,
+      realisation: 0,
+      files: [],
+      pdf_files: []
+    });
+    save();
+    crmProjects.push(proj);
+  } else {
+    const idx = crmProjects.findIndex(p => p.id === proj.id);
+    if (idx >= 0) crmProjects[idx] = proj;
+    else crmProjects.push(proj);
+    // Sync vers Pipeline
+    crmSyncToPipeline(proj);
+  }
+
+  crmSave();
+  crmCloseModal();
+  crmRender();
+  renderPipeline();
+  showToast(isNew ? '✅ Projet créé et ajouté au Pipeline' : '✅ Projet mis à jour');
+}
+
+function crmDeleteProject(id) {
+  if (!confirm('Supprimer ce projet CRM ?')) return;
+  crmProjects = crmProjects.filter(p => p.id !== id);
+  crmSave();
+  crmCloseModal();
+  crmRender();
+  showToast('🗑 Projet supprimé');
+}
+
+
 tpLoad();
 // Pré-remplir la date du jour
 (function(){
@@ -7146,6 +7704,36 @@ tpLoad();
 
 
 
+
+
+<!-- ═════════════════════════════════════════════ CRM PROJETS ═══ -->
+<div class="section" id="section-crm">
+  <div class="crm-wrap">
+    <div class="crm-hero">
+      <h2>🎯 CRM Projets &amp; Contacts</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="crmNewProject()">+ Nouveau projet</button>
+        <button class="btn btn-outline btn-sm" onclick="crmSyncFromPipeline()">↺ Sync Pipeline</button>
+      </div>
+    </div>
+    <!-- Alertes retard -->
+    <div class="crm-alerts" id="crm-alerts"></div>
+    <!-- KPIs CRM -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px" id="crm-kpis"></div>
+    <!-- Kanban -->
+    <div class="crm-kanban" id="crm-kanban"></div>
+  </div>
+  <!-- Modal fiche projet -->
+  <div class="crm-modal-overlay" id="crm-modal" style="display:none" onclick="if(event.target===this)crmCloseModal()">
+    <div class="crm-modal">
+      <div class="crm-modal-head">
+        <h3 id="crm-modal-title">Fiche Projet</h3>
+        <button class="crm-modal-close" onclick="crmCloseModal()">✕ Fermer</button>
+      </div>
+      <div class="crm-modal-body" id="crm-modal-body"></div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
