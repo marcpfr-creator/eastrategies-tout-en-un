@@ -7543,11 +7543,23 @@ function crmOpenModal(proj, defaultStage) {
       <div class="crm-section-title">Notes & Demandes</div>
       <textarea class="crm-textarea" id="crm-f-notes" rows="4" placeholder="Besoins exprimés, contraintes, points clés…">${escHtml(proj.notes)}</textarea>
     </div>
+    <!-- Pièces jointes PDF -->
+    <div>
+      <div class="crm-section-title">📎 Pièces jointes</div>
+      <div id="crm-pdf-list">${crmRenderPdfList(proj.pdf_files || [])}</div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:10px">
+        <label class="btn btn-outline btn-sm" style="cursor:pointer">
+          📂 Joindre un PDF
+          <input type="file" accept=".pdf" style="display:none" onchange="crmUploadPdf(this)">
+        </label>
+        <span id="crm-pdf-uploading" style="font-size:11px;color:var(--muted);display:none">⏳ Upload en cours…</span>
+      </div>
+    </div>
     <!-- Actions -->
     <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border)">
-      ${!isNew ? `<button class="btn btn-outline btn-sm" style="color:#e53935;border-color:#e53935" onclick="crmDeleteProject('${proj.id}')">🗑 Supprimer</button>` : ''}
+      ${!isNew ? `<button class="btn btn-outline btn-sm" style="color:#e53935;border-color:#e53935" onclick="crmDeleteProject('${proj.id}')">\uD83D\uDDD1 Supprimer</button>` : ''}
       <button class="btn btn-outline btn-sm" onclick="crmCloseModal()">Annuler</button>
-      <button class="btn btn-primary btn-sm" onclick="crmSaveModal(${isNew})">💾 Enregistrer</button>
+      <button class="btn btn-primary btn-sm" onclick="crmSaveModal(${isNew})">\uD83D\uDCBE Enregistrer</button>
     </div>
   `;
 
@@ -7649,6 +7661,64 @@ function crmToggleArchives() {
   }
   chk.checked = !chk.checked;
   crmRender();
+}
+
+// ── Pièces jointes PDF CRM ───────────────────────────────
+function crmRenderPdfList(pdfs) {
+  if (!pdfs || pdfs.length === 0) return '<div style="color:var(--muted);font-size:11px;padding:4px 0">Aucune pièce jointe</div>';
+  return pdfs.map((pf, i) =>
+    `<a href="${pf.url}" target="_blank" class="file-pill" style="text-decoration:none" title="${pf.name}">
+      📎<span class="fp-name">${pf.name}</span>
+      <span class="fp-del" onclick="event.preventDefault();event.stopPropagation();crmRemovePdf(${i})">×</span>
+    </a>`
+  ).join('');
+}
+
+async function crmUploadPdf(input) {
+  if (!window._crmCurrentProj) return;
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { showToast('⚠ Fichier trop lourd (max 10 Mo)'); return; }
+  const uploading = document.getElementById('crm-pdf-uploading');
+  if (uploading) uploading.style.display = 'inline';
+  const SUPABASE_URL = 'https://nbxivizwlbavztliswmb.supabase.co';
+  const SUPABASE_KEY = typeof SK !== 'undefined' ? SK : '';
+  const fileName = `crm/${window._crmCurrentProj.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/task-pdfs/${fileName}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/pdf', 'x-upsert': 'true' },
+      body: file
+    });
+    if (!res.ok) throw new Error('Upload échoué : ' + res.status);
+    const url = `${SUPABASE_URL}/storage/v1/object/public/task-pdfs/${fileName}`;
+    window._crmCurrentProj.pdf_files = window._crmCurrentProj.pdf_files || [];
+    window._crmCurrentProj.pdf_files.push({ name: file.name, url, path: fileName });
+    document.getElementById('crm-pdf-list').innerHTML = crmRenderPdfList(window._crmCurrentProj.pdf_files);
+    showToast('📎 PDF joint avec succès');
+  } catch(e) {
+    showToast('⚠ Erreur upload : ' + e.message);
+  } finally {
+    if (uploading) uploading.style.display = 'none';
+    input.value = '';
+  }
+}
+
+async function crmRemovePdf(idx) {
+  if (!window._crmCurrentProj) return;
+  const pf = window._crmCurrentProj.pdf_files[idx];
+  if (!pf) return;
+  const SUPABASE_URL = 'https://nbxivizwlbavztliswmb.supabase.co';
+  const SUPABASE_KEY = typeof SK !== 'undefined' ? SK : '';
+  try {
+    await fetch(`${SUPABASE_URL}/storage/v1/object/task-pdfs/${pf.path}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+  } catch(e) { /* ignorer l'erreur de suppression storage */ }
+  window._crmCurrentProj.pdf_files.splice(idx, 1);
+  document.getElementById('crm-pdf-list').innerHTML = crmRenderPdfList(window._crmCurrentProj.pdf_files);
+  showToast('🗑 Pièce jointe supprimée');
 }
 
 function crmAddContact() {
