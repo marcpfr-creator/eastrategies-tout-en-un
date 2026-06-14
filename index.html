@@ -6934,23 +6934,35 @@ async function sbSyncOnFocus() {
   } catch(e) { /* silencieux */ }
 }
 
-// Sauvegarde silencieuse de sécurité toutes les 2 min (filet de sécurité)
+// Sauvegarde silencieuse de sécurité toutes les 2 min
+// Ne pousse vers Supabase QUE si les données locales sont plus récentes que la version cloud
 function sbAutoSave() {
   const now = Date.now();
-  try {
-    localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions, saved: new Date().toISOString()}));
-    localStorage.setItem('main_saved_at', now.toString());
-  } catch(e) {}
-  sbPush('main', {prospects, factures, transactions});
-  if (tpEntries && tpEntries.length) {
-    localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
-    localStorage.setItem('tp_entries_saved_at', now.toString());
-    sbPush('tp_entries', tpEntries);
+  // main (prospects/factures/transactions)
+  const mainLocalTs  = parseInt(localStorage.getItem('main_saved_at') || '0');
+  const mainRemoteTs = _sbRemoteTs.main || 0;
+  if (mainLocalTs >= mainRemoteTs) {
+    // On est à jour ou plus récent : on peut pousser
+    try {
+      localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions, saved: new Date().toISOString()}));
+    } catch(e) {}
+    sbPush('main', {prospects, factures, transactions});
   }
+  // tp_entries
+  if (tpEntries && tpEntries.length) {
+    const tpLocalTs  = parseInt(localStorage.getItem('tp_entries_saved_at') || '0');
+    const tpRemoteTs = _sbRemoteTs.tp_entries || 0;
+    if (tpLocalTs >= tpRemoteTs) {
+      sbPush('tp_entries', tpEntries);
+    }
+  }
+  // tw_tasks
   if (twTasks && twTasks.length) {
-    localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
-    localStorage.setItem('tw_tasks_saved_at', now.toString());
-    sbPush('tw_tasks', twTasks);
+    const twLocalTs  = parseInt(localStorage.getItem('tw_tasks_saved_at') || '0');
+    const twRemoteTs = _sbRemoteTs.tw_tasks || 0;
+    if (twLocalTs >= twRemoteTs) {
+      sbPush('tw_tasks', twTasks);
+    }
   }
   const el = document.getElementById('last-save');
   if (el) el.textContent = 'Auto-sauvegardé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
