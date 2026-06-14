@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Restauration ERP Eastrategies®</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+  .box{background:#fff;border-radius:12px;padding:40px;max-width:480px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.12);text-align:center}
+  h1{font-size:22px;margin-bottom:8px;color:#1a1a1a}
+  p{color:#555;font-size:14px;margin-bottom:24px}
+  .btn{background:#1a1aff;color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;width:100%;margin-bottom:12px}
+  .btn:hover{background:#0000cc}
+  .btn-go{background:#2e7d32}
+  .btn-go:hover{background:#1b5e20}
+  .status{margin-top:16px;padding:12px;border-radius:8px;font-size:13px;display:none}
+  .status.ok{background:#e8f5e9;color:#2e7d32;display:block}
+  .status.err{background:#ffebee;color:#c62828;display:block}
+  .status.loading{background:#e3f2fd;color:#1565c0;display:block}
+  .kpi{display:flex;gap:16px;justify-content:center;margin:16px 0;flex-wrap:wrap}
+  .kpi-item{background:#f5f5f5;border-radius:8px;padding:10px 16px;text-align:center}
+  .kpi-val{font-size:24px;font-weight:800;color:#1a1aff}
+  .kpi-lbl{font-size:11px;color:#777;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>🔄 Restauration ERP</h1>
+  <p>Cliquez sur le bouton ci-dessous pour récupérer toutes vos données depuis Supabase et les restaurer dans votre navigateur.</p>
+
+  <div class="kpi" id="kpi-preview" style="display:none"></div>
+
+  <button class="btn" id="btn-restore" onclick="doRestore()">📥 Restaurer mes données</button>
+  <button class="btn btn-go" id="btn-go" style="display:none" onclick="window.location.href='index.html'">▶ Ouvrir l'ERP</button>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const SB_URL = 'https://nbxivizwlbavztliswmb.supabase.co';
+const SB_KEY = 'sb_publishable_eN67jsvRuXZ03_mP07oKlw_PWXsgF6d';
+const SK = 'eastrategies_v4';
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+}
+
+async function doRestore() {
+  document.getElementById('btn-restore').disabled = true;
+  setStatus('⏳ Connexion à Supabase…', 'loading');
+
+  try {
+    const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,value,updated_at', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    if (!res.ok) throw new Error('Erreur HTTP ' + res.status);
+    const data = await res.json();
+    if (!data || !data.length) throw new Error('Aucune donnée trouvée dans Supabase');
+
+    let restored = { prospects: 0, factures: 0, transactions: 0, tasks: 0 };
+
+    data.forEach(row => {
+      if (row.key === 'main' && row.value) {
+        const v = row.value;
+        localStorage.setItem(SK, JSON.stringify(v));
+        localStorage.removeItem('main_saved_at'); // forcer rechargement au prochain démarrage
+        restored.prospects = (v.prospects || []).length;
+        restored.factures = (v.factures || []).length;
+        restored.transactions = (v.transactions || []).length;
+      }
+      if (row.key === 'tw_tasks' && row.value) {
+        localStorage.setItem('tw_tasks', JSON.stringify(row.value));
+        localStorage.removeItem('tw_tasks_saved_at');
+        restored.tasks = (row.value || []).length;
+      }
+      if (row.key === 'tp_entries' && row.value) {
+        localStorage.setItem('tp_entries', JSON.stringify(row.value));
+        localStorage.removeItem('tp_entries_saved_at');
+      }
+      if (row.key === 'crm' && row.value && row.value.crm_projects) {
+        localStorage.setItem('crm_projects', JSON.stringify(row.value.crm_projects));
+      }
+    });
+
+    // Afficher les KPIs
+    const kpi = document.getElementById('kpi-preview');
+    kpi.style.display = 'flex';
+    kpi.innerHTML = [
+      { val: restored.prospects, lbl: 'Prospects' },
+      { val: restored.factures, lbl: 'Factures' },
+      { val: restored.transactions, lbl: 'Transactions' },
+      { val: restored.tasks, lbl: 'Tâches' }
+    ].map(k => `<div class="kpi-item"><div class="kpi-val">${k.val}</div><div class="kpi-lbl">${k.lbl}</div></div>`).join('');
+
+    setStatus('✅ Données restaurées avec succès ! Cliquez sur "Ouvrir l\'ERP" pour continuer.', 'ok');
+    document.getElementById('btn-go').style.display = 'block';
+    document.getElementById('btn-restore').style.display = 'none';
+
+  } catch(e) {
+    setStatus('⚠ Erreur : ' + e.message, 'err');
+    document.getElementById('btn-restore').disabled = false;
+  }
+}
+</script>
+</body>
+</html>
