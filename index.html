@@ -968,10 +968,10 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
 <!-- Barre sync multi-appareils -->
 <div style="background:#e3f2fd;border-bottom:2px solid #1565c0;padding:7px 24px;display:flex;align-items:center;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;flex-wrap:wrap;">
   <span style="color:#1565c0;font-weight:700;">☁ SYNC CLOUD</span>
-  <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="sbLoadAll(true);showToast('↺ Rechargement forcé depuis le cloud…')" title="Forcer le rechargement depuis Supabase (utile après modification sur un autre appareil)">↺ Forcer sync</button>
+  <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="sbForceSyncSafe()" title="Recharger depuis Supabase (utile si vous avez modifié sur un autre appareil)">↺ Forcer sync</button>
   <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="syncExport()">⬇ Backup JSON</button>
   <span id="sync-status" style="color:#1565c0;font-size:10px;margin-left:8px;transition:color .3s">Connexion…</span>
-  <span style="color:#888;font-size:9px;margin-left:auto">Sync auto au retour de focus (iPad/iPhone/Mac)</span>
+  <span style="color:#888;font-size:9px;margin-left:auto">Sync manuelle uniquement — auto-save toutes les 2 min</span>
 </div>
 
 <!-- ═══════════════════════════════════════════ DASHBOARD ═══ -->
@@ -6907,9 +6907,10 @@ async function sbLoadAll(forceApply) {
   }
 }
 
-// Sync au retour de focus (changement d'onglet, réveil iPad/iPhone)
-// Charge uniquement si Supabase a une version plus récente
-async function sbSyncOnFocus() {
+// sbSyncOnFocus SUPPRIMÉE - causait des pertes de données en écrasant les données locales
+// La fonction est conservée mais ne fait plus rien
+async function sbSyncOnFocus() { return; // désactivée
+  if (sbInitialLoading) return;
   if (sbInitialLoading) return;
   try {
     const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,updated_at', {
@@ -6990,13 +6991,29 @@ window.addEventListener('load', function() {
   });
 });
 
-// Sync au retour de focus : visibilitychange (iPad/iPhone) + focus (Mac)
-document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState === 'visible') sbSyncOnFocus();
-});
-window.addEventListener('focus', function() {
-  sbSyncOnFocus();
-});
+// Sync automatique au focus SUPPRIMÉE (causait des pertes de données)
+// La sync multi-appareils est uniquement manuelle via le bouton "Forcer sync"
+
+// Forcer sync sécurisé : demande confirmation si données locales plus récentes
+async function sbForceSyncSafe() {
+  const mainLocalTs = parseInt(localStorage.getItem('main_saved_at') || '0');
+  const mainRemoteTs = _sbRemoteTs.main || 0;
+  if (mainLocalTs > mainRemoteTs + 5000) {
+    // Données locales plus récentes : risque de perte
+    const ok = confirm(
+      '⚠️ ATTENTION\n\n' +
+      'Vos données locales sont plus récentes que Supabase.\n' +
+      'Forcer la sync va REMPLACER votre travail actuel par la version cloud.\n\n' +
+      'Dernière sauvegarde locale : ' + new Date(mainLocalTs).toLocaleTimeString('fr-FR') + '\n' +
+      'Dernière version Supabase : ' + (mainRemoteTs ? new Date(mainRemoteTs).toLocaleTimeString('fr-FR') : 'inconnue') + '\n\n' +
+      'Continuer quand même ?'
+    );
+    if (!ok) return;
+  }
+  showToast('↺ Rechargement depuis le cloud…');
+  await sbLoadAll(true);
+  showToast('✅ Données rechargées depuis Supabase');
+}
 
 // ─────────────────────────────────────────────
 //  TEMPS PASSÉ
