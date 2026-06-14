@@ -968,10 +968,10 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
 <!-- Barre sync multi-appareils -->
 <div style="background:#e3f2fd;border-bottom:2px solid #1565c0;padding:7px 24px;display:flex;align-items:center;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;flex-wrap:wrap;">
   <span style="color:#1565c0;font-weight:700;">☁ SYNC CLOUD</span>
-  <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="sbForceSyncSafe()" title="Recharger depuis Supabase (utile si vous avez modifié sur un autre appareil)">↺ Forcer sync</button>
+  <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="sbRestoreFromCloud()" title="Restaurer depuis le backup cloud Supabase (REMPLACE les données locales)">☁ Restaurer backup</button>
   <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="syncExport()">⬇ Backup JSON</button>
   <span id="sync-status" style="color:#1565c0;font-size:10px;margin-left:8px;transition:color .3s">Connexion…</span>
-  <span style="color:#888;font-size:9px;margin-left:auto">Sync manuelle uniquement — auto-save toutes les 2 min</span>
+  <span style="color:#888;font-size:9px;margin-left:auto">🔒 localStorage = source de vérité — Supabase = backup uniquement — auto-save toutes les 2 min</span>
 </div>
 
 <!-- ═══════════════════════════════════════════ DASHBOARD ═══ -->
@@ -7007,74 +7007,79 @@ async function sbPush(key, value) {
   return ts;
 }
 
-// Charge depuis Supabase et applique uniquement si plus récent que local
-async function sbLoadAll(forceApply) {
+// ═══════════════════════════════════════════════════════
+// ARCHITECTURE SYNC v3 — localStorage = SOURCE DE VÉRITÉ
+// Supabase = BACKUP PUSH-ONLY
+// JAMAIS de chargement automatique depuis Supabase
+// Restauration uniquement via bouton explicite avec confirmation
+// ═══════════════════════════════════════════════════════
+
+// Restauration depuis Supabase (MANUELLE uniquement, avec confirmation)
+async function sbRestoreFromCloud() {
+  const hasLocal = localStorage.getItem(SK) && JSON.parse(localStorage.getItem(SK) || '{}').factures?.length > 0;
+  if (hasLocal) {
+    const localFacs = JSON.parse(localStorage.getItem(SK) || '{}').factures || [];
+    const ok = confirm(
+      '⚠️ RESTAURATION DEPUIS LE CLOUD\n\n' +
+      'Votre localStorage contient ' + localFacs.length + ' factures.\n' +
+      'La restauration va REMPLACER vos données locales par la version Supabase.\n\n' +
+      'Cette action est IRRÉVERSIBLE.\n\n' +
+      'Continuer ?'
+    );
+    if (!ok) return;
+  }
+  sbStatus('↺ Restauration depuis le cloud…');
   try {
-    sbStatus('↺ Sync…');
     const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,value,updated_at', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     });
-    if (!res.ok) { sbStatus('⚠ Erreur ' + res.status, false); return; }
+    if (!res.ok) { sbStatus('⚠ Erreur ' + res.status, false); alert('Erreur de connexion à Supabase : ' + res.status); return; }
     const data = await res.json();
-    if (!data || !data.length) { sbStatus('☁ Connecté', true); return; }
-    let changed = false;
+    if (!data || !data.length) { sbStatus('☁ Aucune donnée cloud', false); alert('Aucune donnée trouvée dans le cloud.'); return; }
+    let restored = [];
     data.forEach(row => {
       const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
       if (row.key === 'main' && row.value) {
-        const localTs = parseInt(localStorage.getItem('main_saved_at') || '0');
-        if (forceApply || remoteTs > localTs) {
-          const d = row.value;
-          if (d.prospects)    prospects    = d.prospects;
-          if (d.factures)     factures     = d.factures;
-          if (d.transactions) transactions = d.transactions;
-          localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions}));
-          localStorage.setItem('main_saved_at', remoteTs.toString());
-          _sbRemoteTs.main = remoteTs;
-          changed = true;
-          console.log('[Sync] main chargé depuis Supabase (remote:', new Date(remoteTs).toISOString(), '> local:', new Date(localTs).toISOString()+')');
-        } else {
-          _sbRemoteTs.main = remoteTs;
-        }
+        const d = row.value;
+        if (d.prospects)    prospects    = d.prospects;
+        if (d.factures)     factures     = d.factures;
+        if (d.transactions) transactions = d.transactions;
+        localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions}));
+        localStorage.setItem('main_saved_at', Date.now().toString());
+        _sbRemoteTs.main = remoteTs;
+        restored.push(factures.length + ' factures, ' + prospects.length + ' prospects');
       }
       if (row.key === 'tp_entries' && row.value) {
-        const localTs = parseInt(localStorage.getItem('tp_entries_saved_at') || '0');
-        if (forceApply || remoteTs > localTs) {
-          tpEntries = row.value;
-          localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
-          localStorage.setItem('tp_entries_saved_at', remoteTs.toString());
-          _sbRemoteTs.tp_entries = remoteTs;
-          changed = true;
-        } else {
-          _sbRemoteTs.tp_entries = remoteTs;
-        }
+        tpEntries = row.value;
+        localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
+        localStorage.setItem('tp_entries_saved_at', Date.now().toString());
+        _sbRemoteTs.tp_entries = remoteTs;
+        restored.push(tpEntries.length + ' entrées temps');
       }
       if (row.key === 'tw_tasks' && row.value) {
-        const localTs = parseInt(localStorage.getItem('tw_tasks_saved_at') || '0');
-        if (forceApply || remoteTs > localTs) {
-          twTasks = row.value;
-          localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
-          localStorage.setItem('tw_tasks_saved_at', remoteTs.toString());
-          _sbRemoteTs.tw_tasks = remoteTs;
-          changed = true;
-          console.log('[Sync] tw_tasks chargé depuis Supabase');
-        } else {
-          _sbRemoteTs.tw_tasks = remoteTs;
-        }
+        twTasks = row.value;
+        localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+        localStorage.setItem('tw_tasks_saved_at', Date.now().toString());
+        _sbRemoteTs.tw_tasks = remoteTs;
+        restored.push(twTasks.length + ' tâches');
       }
     });
-    if (changed) {
-      renderDashboard(); renderPipeline(); renderFacturation(); renderTresorerie();
-      tpRender(); twRender();
-      updateGlobalKPIs();
-      populateClientSelects();
-    }
-    sbStatus('☁ Syncé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
+    renderDashboard(); renderPipeline(); renderFacturation(); renderTresorerie();
+    tpRender(); twRender(); updateGlobalKPIs(); populateClientSelects();
+    sbStatus('☁ Restauré ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
+    showToast('✅ Restauré depuis le cloud : ' + restored.join(', '));
   } catch(e) {
     sbStatus('⚠ Hors ligne', false);
-    console.warn('[Sync] Erreur sbLoadAll:', e);
-  } finally {
-    sbInitialLoading = false;
+    alert('Erreur de connexion : ' + e.message);
   }
+}
+
+// Alias pour compatibilité avec le bouton HTML existant
+async function sbLoadAll(forceApply) {
+  // En mode push-only, sbLoadAll ne charge JAMAIS automatiquement
+  // Seul sbRestoreFromCloud peut charger depuis Supabase
+  sbInitialLoading = false;
+  sbStatus('☁ Prêt', true);
 }
 
 // sbSyncOnFocus SUPPRIMÉE - causait des pertes de données en écrasant les données locales
