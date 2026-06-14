@@ -2159,9 +2159,14 @@ function load() {
       if (prospects.length||factures.length||transactions.length) { showToast('↓ Données restaurées'); return; }
     }
   } catch(e){}
+  // Charger les SEED uniquement comme données temporaires en mémoire
+  // NE PAS les sauvegarder dans le localStorage ni dans Supabase
+  // sbLoadAll() les remplacera avec les vraies données Supabase
   prospects    = JSON.parse(JSON.stringify([...SEED_PROSPECTS, ...CSV_PROSPECTS]));
   factures     = JSON.parse(JSON.stringify(SEED_FACTURES));
   transactions = JSON.parse(JSON.stringify(SEED_TRANSACTIONS));
+  // NE PAS appeler save() ici — les SEED ne doivent jamais aller dans Supabase
+  // main_saved_at reste à 0 pour indiquer que ce sont des données SEED
 }
 
 // Flag pour bloquer save() pendant le chargement initial Supabase
@@ -7101,14 +7106,21 @@ async function sbSyncOnFocus() { return; // désactivée
 }
 
 // Sauvegarde silencieuse de sécurité toutes les 2 min
+// BLOQUE si sbInitialLoading est encore vrai (Supabase pas encore chargé)
 // Ne pousse vers Supabase QUE si les données locales sont plus récentes que la version cloud
 function sbAutoSave() {
+  // GARDE-FOU CRITIQUE : ne jamais pousser avant que Supabase ait chargé
+  if (sbInitialLoading) {
+    console.log('[AutoSave] Bloqué : chargement initial Supabase pas encore terminé');
+    return;
+  }
   const now = Date.now();
   // main (prospects/factures/transactions)
   const mainLocalTs  = parseInt(localStorage.getItem('main_saved_at') || '0');
   const mainRemoteTs = _sbRemoteTs.main || 0;
-  if (mainLocalTs >= mainRemoteTs) {
-    // On est à jour ou plus récent : on peut pousser
+  // Ne pousser QUE si localTs > 0 (données réellement saisies, pas des SEED)
+  // ET si localTs >= remoteTs (données locales plus récentes ou égales)
+  if (mainLocalTs > 0 && mainLocalTs >= mainRemoteTs) {
     try {
       localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions, saved: new Date().toISOString()}));
     } catch(e) {}
@@ -7118,7 +7130,7 @@ function sbAutoSave() {
   if (tpEntries && tpEntries.length) {
     const tpLocalTs  = parseInt(localStorage.getItem('tp_entries_saved_at') || '0');
     const tpRemoteTs = _sbRemoteTs.tp_entries || 0;
-    if (tpLocalTs >= tpRemoteTs) {
+    if (tpLocalTs > 0 && tpLocalTs >= tpRemoteTs) {
       sbPush('tp_entries', tpEntries);
     }
   }
@@ -7126,7 +7138,7 @@ function sbAutoSave() {
   if (twTasks && twTasks.length) {
     const twLocalTs  = parseInt(localStorage.getItem('tw_tasks_saved_at') || '0');
     const twRemoteTs = _sbRemoteTs.tw_tasks || 0;
-    if (twLocalTs >= twRemoteTs) {
+    if (twLocalTs > 0 && twLocalTs >= twRemoteTs) {
       sbPush('tw_tasks', twTasks);
     }
   }
