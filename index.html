@@ -1068,6 +1068,10 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
       </select>
     </div>
     <button class="btn btn-primary btn-sm" onclick="openFactureModal()">+ Nouvelle facture</button>
+    <label class="btn btn-outline btn-sm" style="cursor:pointer" title="Importer un export FEC Pennylane (.txt)">
+      📅 Import Pennylane
+      <input type="file" accept=".txt,.csv" style="display:none" onchange="importFecPennylane(this)">
+    </label>
   </div>
 
   <!-- KPIs facturation -->
@@ -2530,6 +2534,167 @@ function marquerPayee(id){
   if(!f)return;
   f.statut='Payée';f.montant_paye=f.montant_ttc;
   save();renderFacturation();showToast('✓ Facture marquée payée');
+}
+
+// ═══════════════════════════════════════════════════════
+//  IMPORT FEC PENNYLANE
+// ═══════════════════════════════════════════════════════
+function importFecPennylane(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const text = e.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) { showToast('⚠ Fichier vide ou invalide'); return; }
+
+      // Parser les lignes TSV (séparateur tabulation)
+      const headers = lines[0].split('\t');
+      const col = h => headers.indexOf(h);
+      const rows = lines.slice(1).map(l => l.split('\t'));
+
+      // Indices des colonnes FEC
+      const iEcritureNum = col('EcritureNum');
+      const iCompteNum   = col('CompteNum');
+      const iCompAuxLib  = col('CompAuxLib');
+      const iPieceRef    = col('PieceRef');
+      const iPieceDate   = col('PieceDate');
+      const iEcritureLib = col('EcritureLib');
+      const iDebit       = col('Debit');
+      const iCredit      = col('Credit');
+      const iEcritureLet = col('EcritureLet');
+      const iDateLet     = col('DateLet');
+      const iMontantDev  = col('Montantdevise');
+
+      // Grouper les lignes par EcritureNum
+      const groupes = {};
+      rows.forEach(r => {
+        const num = r[iEcritureNum];
+        if (!num) return;
+        if (!groupes[num]) groupes[num] = [];
+        groupes[num].push(r);
+      });
+
+      // Numéros de factures déjà présents dans l'ERP
+      const existingNums = new Set(factures.map(f => f.num));
+
+      // Prochain ID de facture
+      const maxId = factures.reduce((m, f) => {
+        const n = parseInt((f.id || 'F0').replace(/\D/g, '')) || 0;
+        return Math.max(m, n);
+      }, 0);
+      let nextId = maxId + 1;
+
+      let imported = 0, skipped = 0, avoirs = 0;
+      const nouvelles = [];
+
+      Object.values(groupes).forEach(lignes => {
+        // Ligne compte client (411)
+        const ligneClient = lignes.find(r => r[iCompteNum] && r[iCompteNum].startsWith('411') && r[iCompAuxLib]);
+        // Ligne produit (70...)
+        const ligneProduit = lignes.find(r => r[iCompteNum] && r[iCompteNum].startsWith('70'));
+        // Ligne TVA (4457...)
+        const ligneTva = lignes.find(r => r[iCompteNum] && r[iCompteNum].startsWith('4457'));
+
+        if (!ligneClient || !ligneProduit) return;
+
+        // Extraire le numéro de facture depuis EcritureLib (ex: "Facture SNECI - FAC-2026-143")
+        const libelle = ligneClient[iEcritureLib] || '';
+        const facMatch = libelle.match(/FAC-[\w-]+/);
+        const facNum = facMatch ? facMatch[0] : (ligneClient[iPieceRef] || 'IMP-' + ligneClient[iEcritureNum]);
+
+        // Ignorer si déjà présent
+        if (existingNums.has(facNum)) { skipped++; return; }
+
+        // Client
+        const client = ligneClient[iCompAuxLib] || '';
+
+        // Date d'émission (PieceDate format YYYYMMDD)
+        const rawDate = ligneClient[iPieceDate] || '';
+        const dateEmission = rawDate.length === 8
+          ? rawDate.slice(0,4) + '-' + rawDate.slice(4,6) + '-' + rawDate.slice(6,8)
+          : '';
+
+        // Montant HT = crédit de la ligne produit (valeur absolue)
+        const parseNum = s => parseFloat((s || '0').replace(',', '.')) || 0;
+        const montantHT = Math.abs(parseNum(ligneProduit[iCredit]) || parseNum(ligneProduit[iDebit]));
+
+        // Montant TTC = débit de la ligne client (valeur absolue)
+        const montantTTC = Math.abs(parseNum(ligneClient[iDebit]) || parseNum(ligneClient[iCredit]));
+
+        // TVA %
+        let tva = 0;
+        if (montantHT > 0 && montantTTC > montantHT) {
+          tva = Math.round((montantTTC / montantHT - 1) * 100);
+        }
+
+        // Statut payé : présence d'une lettre de lettrage ET d'une date de lettrage
+        const lettre = ligneClient[iEcritureLet] || '';
+        const dateLet = ligneClient[iDateLet] || '';
+        const estPaye = lettre.length > 0 && dateLet.length > 0;
+
+        // Avoir : "Avoir" dans le libellé
+        const estAvoir = libelle.toLowerCase().includes('avoir');
+        if (estAvoir) { avoirs++; }
+
+        // Date de lettrage = date de paiement
+        let datePaiement = '';
+        if (estPaye && dateLet.length === 8) {
+          datePaiement = dateLet.slice(0,4) + '-' + dateLet.slice(4,6) + '-' + dateLet.slice(6,8);
+        }
+
+        // Échéance : date émission + 30j par défaut
+        let dateEcheance = '';
+        if (dateEmission) {
+          const d = new Date(dateEmission);
+          d.setDate(d.getDate() + 30);
+          dateEcheance = d.toISOString().slice(0, 10);
+        }
+
+        const statut = estAvoir ? 'Annulée'
+          : estPaye ? 'Payée'
+          : 'Envoyée';
+
+        nouvelles.push({
+          id: 'F' + String(nextId++).padStart(3, '0'),
+          num: facNum,
+          client,
+          prospect_id: '',
+          montant_ht: estAvoir ? -montantHT : montantHT,
+          tva,
+          montant_ttc: estAvoir ? -montantTTC : montantTTC,
+          montant_paye: estPaye ? montantTTC : 0,
+          date_emission: dateEmission,
+          date_echeance: dateEcheance,
+          date_paiement: datePaiement,
+          statut,
+          notes: libelle,
+          files: []
+        });
+        existingNums.add(facNum);
+        imported++;
+      });
+
+      if (nouvelles.length === 0) {
+        showToast('ℹ Aucune nouvelle facture à importer (' + skipped + ' déjà présentes)');
+        input.value = '';
+        return;
+      }
+
+      factures = [...nouvelles, ...factures];
+      save();
+      renderFacturation();
+      showToast('✅ ' + imported + ' facture(s) importée(s)' +
+        (skipped > 0 ? ' — ' + skipped + ' ignorée(s) (déjà présentes)' : '') +
+        (avoirs > 0 ? ' — ' + avoirs + ' avoir(s)' : ''));
+    } catch(err) {
+      showToast('⚠ Erreur import : ' + err.message);
+      console.error('[FEC Import]', err);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
 }
 
 // ═══════════════════════════════════════════════════════
