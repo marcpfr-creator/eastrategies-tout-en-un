@@ -1083,6 +1083,20 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
     <div class="kpi"><div class="kpi-accent" style="background:var(--purple)"></div><div class="kpi-label">Nb factures</div><div class="kpi-value" id="fkpi-nb" style="color:var(--purple)">—</div></div>
   </div>
 
+  <!-- Bloc réconciliation HT / TTC / Encaissé -->
+  <div id="fact-reconciliation" style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:8px;padding:12px 18px;margin-bottom:16px;font-size:12px;font-family:'IBM Plex Mono',monospace;">
+    <div style="font-weight:700;color:#1565c0;margin-bottom:8px;font-size:11px;letter-spacing:.5px;">📊 RÉCONCILIATION CA / ENCAISSEMENTS</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">
+      <div><span style="color:#666;">CA HT facturé&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span id="rec-ht" style="font-weight:700;color:#1565c0;">—</span></div>
+      <div><span style="color:#666;">CA TTC facturé&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span id="rec-ttc" style="font-weight:700;color:#1565c0;">—</span></div>
+      <div><span style="color:#666;">TVA collectée&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span id="rec-tva" style="font-weight:700;color:#666;">—</span></div>
+      <div><span style="color:#666;">Encaissé TTC&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span id="rec-enc" style="font-weight:700;color:#00b87a;">—</span></div>
+      <div><span style="color:#666;">Reste à encaisser TTC&nbsp;</span><span id="rec-reste" style="font-weight:700;color:#ff9900;">—</span></div>
+      <div><span style="color:#666;">Taux encaissement&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><span id="rec-taux" style="font-weight:700;">—</span></div>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:#999;">ℹ L'encaissé TTC peut dépasser le CA HT car il inclut la TVA (20%). Comparer TTC avec TTC.</div>
+  </div>
+
   <div class="table-wrap">
     <table>
       <thead><tr>
@@ -2456,6 +2470,21 @@ function renderFacturation(){
   document.getElementById('fkpi-attente').textContent=fmtEur(fAtt);
   document.getElementById('fkpi-retard').textContent=fmtEur(fRet);
   document.getElementById('fkpi-nb').textContent=all.length;
+
+  // Bloc réconciliation
+  const recTtc = all.reduce((s,f)=>s+(f.montant_ttc||0),0);
+  const recTva = recTtc - fTotal;
+  const recEnc = all.reduce((s,f)=>s+(f.montant_paye||0),0);
+  const recReste = recTtc - recEnc;
+  const recTaux = recTtc > 0 ? Math.round(recEnc / recTtc * 100) : 0;
+  const setRec = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  setRec('rec-ht',    fmtEur(fTotal));
+  setRec('rec-ttc',   fmtEur(recTtc));
+  setRec('rec-tva',   fmtEur(recTva));
+  setRec('rec-enc',   fmtEur(recEnc));
+  setRec('rec-reste', fmtEur(recReste));
+  const tEl = document.getElementById('rec-taux');
+  if(tEl){ tEl.textContent = recTaux + ' %'; tEl.style.color = recTaux >= 80 ? '#00b87a' : recTaux >= 50 ? '#ff9900' : '#e53935'; }
 
   const tbody=document.getElementById('fact-body');
   const empty=document.getElementById('fact-empty');
