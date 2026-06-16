@@ -8113,6 +8113,180 @@ function crmDeleteProject(id) {
 }
 
 
+// ── Import Devis PDF Pennylane → CRM ────────────────────
+function crmImportDevisPdf() {
+  document.getElementById('crm-pdf-input').value = '';
+  document.getElementById('crm-pdf-input').click();
+}
+
+function crmHandleDevisPdf(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showToast('⏳ Lecture du PDF…');
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const typedarray = new Uint8Array(e.target.result);
+    // Utiliser pdf.js via CDN si disponible, sinon extraction basique
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.getDocument({ data: typedarray }).promise.then(pdf => {
+        let fullText = '';
+        const pages = [];
+        for (let i = 1; i <= pdf.numPages; i++) pages.push(i);
+        Promise.all(pages.map(n => pdf.getPage(n).then(p => p.getTextContent().then(tc => tc.items.map(it => it.str).join(' ')))))
+          .then(texts => { fullText = texts.join('\n'); crmParseDevisText(fullText, file); });
+      }).catch(() => showToast('⚠ Impossible de lire ce PDF'));
+    } else {
+      // Charger pdf.js dynamiquement
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload = function() {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        pdfjsLib.getDocument({ data: typedarray }).promise.then(pdf => {
+          const pages = [];
+          for (let i = 1; i <= pdf.numPages; i++) pages.push(i);
+          Promise.all(pages.map(n => pdf.getPage(n).then(p => p.getTextContent().then(tc => tc.items.map(it => it.str).join(' ')))))
+            .then(texts => { crmParseDevisText(texts.join('\n'), file); });
+        }).catch(() => showToast('⚠ Impossible de lire ce PDF'));
+      };
+      document.head.appendChild(script);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function crmParseDevisText(text, file) {
+  // ── Extraction des champs depuis le texte du devis Pennylane ──
+  const get = (patterns) => {
+    for (const rx of patterns) {
+      const m = text.match(rx);
+      if (m) return m[1].trim();
+    }
+    return '';
+  };
+
+  // Numéro de devis
+  const numDevis = get([/Num[ée]ro\s+([A-Z]{2,}-\d{4}-\d+)/i, /(DEV-\d{4}-\d+)/i, /(DEVIS-\d+)/i]);
+
+  // Dates
+  const dateEmission = get([/Date d[''']?[ée]mission\s+(\d{1,2}\s+\w+\s+\d{4})/i, /Date d[''']?[ée]mission\s+(\d{2}\/\d{2}\/\d{4})/i]);
+  const dateExpiration = get([/Date d[''']?expiration\s+(\d{1,2}\s+\w+\s+\d{4})/i, /Date d[''']?expiration\s+(\d{2}\/\d{2}\/\d{4})/i]);
+
+  // Conversion date texte → ISO
+  const moisFr = {'janvier':'01','février':'02','mars':'03','avril':'04','mai':'05','juin':'06','juillet':'07','août':'08','septembre':'09','octobre':'10','novembre':'11','décembre':'12'};
+  const parseDateFr = (s) => {
+    if (!s) return '';
+    const m = s.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+    if (m) { const mo = moisFr[m[2].toLowerCase()]; return mo ? `${m[3]}-${mo}-${m[1].padStart(2,'0')}` : ''; }
+    const m2 = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+    return '';
+  };
+  const isoEmission   = parseDateFr(dateEmission);
+  const isoExpiration = parseDateFr(dateExpiration);
+
+  // Client (ligne après "Client ou Cliente" ou "SAS", "SARL", "SA", "SCI")
+  const company = get([
+    /Client ou Cliente\s+([A-Z][A-Z\s&]{2,40})/,
+    /(?:SAS|SARL|SA|SCI|EURL|SNC)\s+([A-Z][A-Z\s&]{2,40})/
+  ]) || get([/Client ou Cliente\s+([^\n]{3,50})/]);
+
+  // Contact (prénom + nom)
+  const contactName = get([/([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+\d{3,}/]);
+
+  // Email
+  const email = get([/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/]);
+
+  // Téléphone
+  const phone = get([/(\+?\d[\d\s.\-]{7,15}\d)/]);
+
+  // Montant HT
+  const amountHT = parseFloat(get([/Total HT[\s:]+([\d\s]+[,.]\d{2})/, /Base HT[\s:]+([\d\s]+[,.]\d{2})/]).replace(/\s/g,'').replace(',','.')) || 0;
+
+  // Montant TTC
+  const amountTTC = parseFloat(get([/Total TTC[\s:]+([\d\s]+[,.]\d{2})/, /TOTAL TTC[\s:]+([\d\s]+[,.]\d{2})/]).replace(/\s/g,'').replace(',','.')) || 0;
+
+  // Objet / description
+  const objet = get([/Prestation de ([^\n]{5,80})/, /Type de vente\s+([^\n]{3,60})/]);
+
+  // ── Construction du projet CRM ──
+  const projId = 'CRM' + Date.now() + Math.random().toString(36).slice(2,6);
+  const today = new Date().toISOString().split('T')[0];
+
+  const proj = {
+    id: projId,
+    pipeline_id: null,
+    company: company || file.name.replace('.pdf',''),
+    stage: 'devis_envoye',
+    amount: amountHT || amountTTC,
+    proba: 50,
+    responsable: '',
+    source: 'Devis Pennylane',
+    last_activity: isoEmission || today,
+    notes: (objet ? `Objet : ${objet}\n` : '') + (numDevis ? `N° devis : ${numDevis}\n` : '') + (amountTTC ? `Montant TTC : ${amountTTC.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}\n` : ''),
+    contacts: contactName || email ? [{ id: 'C1', name: contactName || '', role: '', email: email || '', phone: phone || '' }] : [],
+    history: [{ id: 'H1', type: 'Devis', date: isoEmission || today, text: `Devis ${numDevis || file.name} envoyé${amountTTC ? ' — ' + amountTTC.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}) + ' TTC' : ''}` }],
+    tasks: isoExpiration ? [{ id: 'T1', text: `Relancer avant expiration du devis${numDevis ? ' ' + numDevis : ''}`, due: isoExpiration, prio: 'haute', done: false }] : [],
+    pdf_files: []
+  };
+
+  // Créer aussi dans le Pipeline
+  const newPipelineId = nextProspectId();
+  proj.pipeline_id = newPipelineId;
+  prospects.push({
+    id: newPipelineId,
+    entreprise: proj.company,
+    contact: proj.contacts.length > 0 ? proj.contacts[0].name : '',
+    email: proj.contacts.length > 0 ? proj.contacts[0].email : '',
+    telephone: proj.contacts.length > 0 ? proj.contacts[0].phone : '',
+    source: proj.source,
+    statut: 'Devis envoyé',
+    temperature: 'Chaud',
+    num_devis: numDevis,
+    date_devis: isoEmission,
+    date_relance: isoExpiration,
+    responsable: '',
+    notes: proj.notes,
+    montant: proj.amount,
+    proba: 50,
+    realisation: 0,
+    files: [],
+    pdf_files: []
+  });
+  save();
+  crmProjects.push(proj);
+  crmSave();
+  crmRender();
+  renderPipeline();
+
+  // Uploader le PDF dans Supabase Storage
+  if (file) {
+    const reader2 = new FileReader();
+    reader2.onload = async function(ev) {
+      const blob = new Blob([ev.target.result], { type: 'application/pdf' });
+      const path = `crm/${projId}/${file.name}`;
+      const res = await fetch(`${SB_URL}/storage/v1/object/task-pdfs/${path}`, {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/pdf', 'x-upsert': 'true' },
+        body: blob
+      });
+      if (res.ok) {
+        const url = `${SB_URL}/storage/v1/object/public/task-pdfs/${path}`;
+        const idx = crmProjects.findIndex(p => p.id === projId);
+        if (idx >= 0) { crmProjects[idx].pdf_files = [{ name: file.name, url }]; crmSave(); }
+        showToast(`✅ Projet créé : ${proj.company} — devis joint`);
+      } else {
+        showToast(`✅ Projet créé : ${proj.company} (PDF non joint — vérifiez Supabase Storage)`);
+      }
+    };
+    reader2.readAsArrayBuffer(file);
+  } else {
+    showToast(`✅ Projet créé : ${proj.company}`);
+  }
+
+  // Ouvrir la fiche pour vérification
+  setTimeout(() => crmOpenModal(projId), 400);
+}
+
 tpLoad();
 // Pré-remplir la date du jour
 (function(){
@@ -8134,8 +8308,10 @@ tpLoad();
       <h2>🎯 CRM Projets &amp; Contacts</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary btn-sm" onclick="crmNewProject()">+ Nouveau projet</button>
+        <button class="btn btn-sm" style="background:#7b1fa2;color:#fff;border:none;cursor:pointer;" onclick="crmImportDevisPdf()">📄 Importer devis PDF</button>
         <button class="btn btn-outline btn-sm" onclick="crmSyncFromPipeline()">↺ Sync Pipeline</button>
         <button class="btn btn-outline btn-sm" id="crm-archives-btn" onclick="crmToggleArchives()">📂 Archives (0)</button>
+        <input type="file" id="crm-pdf-input" accept="application/pdf" style="display:none" onchange="crmHandleDevisPdf(this)">
       </div>
     </div>
     <!-- Alertes retard -->
