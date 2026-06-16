@@ -8199,14 +8199,21 @@ function crmParseDevisText(text, file) {
   // Téléphone
   const phone = get([/(\+?\d[\d\s.\-]{7,15}\d)/]);
 
-  // Montant HT
-  const amountHT = parseFloat(get([/Total HT[\s:]+([\d\s]+[,.]\d{2})/, /Base HT[\s:]+([\d\s]+[,.]\d{2})/]).replace(/\s/g,'').replace(',','.')) || 0;
+  // Montant HT — gère espaces dans les nombres (ex: "3 250,00 €") et lignes séparées
+  const parseAmt = (s) => parseFloat((s||'').replace(/[\s\u00a0]/g,'').replace(',','.').replace('€','')) || 0;
+  const amountHT = parseAmt(get([
+    /Total HT[\s:€\n]*(\d[\d\s\u00a0]*[,.]\d{2})/i,
+    /Base HT[\s:€\n]*(\d[\d\s\u00a0]*[,.]\d{2})/i
+  ]));
 
   // Montant TTC
-  const amountTTC = parseFloat(get([/Total TTC[\s:]+([\d\s]+[,.]\d{2})/, /TOTAL TTC[\s:]+([\d\s]+[,.]\d{2})/]).replace(/\s/g,'').replace(',','.')) || 0;
+  const amountTTC = parseAmt(get([
+    /Total TTC[\s:€\n]*(\d[\d\s\u00a0]*[,.]\d{2})/i,
+    /TOTAL TTC[\s:€\n]*(\d[\d\s\u00a0]*[,.]\d{2})/i
+  ]));
 
   // Objet / description
-  const objet = get([/Prestation de ([^\n]{5,80})/, /Type de vente\s+([^\n]{3,60})/]);
+  const objet = get([/Prestation de ([^\n\r]{5,80})/, /Type de vente[\s:]+([^\n\r]{3,60})/, /Objet[\s:]+([^\n\r]{5,80})/i]);
 
   // ── Construction du projet CRM ──
   const projId = 'CRM' + Date.now() + Math.random().toString(36).slice(2,6);
