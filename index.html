@@ -3982,6 +3982,7 @@ function renderAgenda(){
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('tw-md-input').click()">📂 Charger Weekly</button>
     <input type="file" id="tw-md-input" accept=".md,.txt" style="display:none" onchange="twLoadMdFile(this)">
     <button class="btn btn-ghost btn-sm" onclick="twSyncFromData()">↺ Sync CRM</button>
+    <button class="btn btn-ghost btn-sm" onclick="twPrint()">🖨 Imprimer</button>
     <button class="btn btn-ghost btn-sm" style="color:#c62828;border-color:#c62828" onclick="twDeleteDone()">🗑 Vider terminées</button>
     <button class="btn btn-primary btn-sm" onclick="twSave()">💾 Sauvegarder</button>
   </div>
@@ -6466,6 +6467,68 @@ async function twDeleteDone() {
   twRender();
   twSave();
   showToast('🗑 ' + done.length + ' tâche(s) terminée(s) supprimée(s)');
+}
+
+function twPrint() {
+  const prioLabel = { high:'🔴 Urgent', med:'🟠 Semaine', low:'🟢 Plus tard' };
+  const prioColor = { high:'#c62828', med:'#e65100', low:'#2e7d32' };
+  const today = new Date().toLocaleDateString('fr-FR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  // Grouper par priorité
+  const groups = [
+    { key: 'high', tasks: twTasks.filter(t => t.prio === 'high') },
+    { key: 'med',  tasks: twTasks.filter(t => t.prio === 'med') },
+    { key: 'low',  tasks: twTasks.filter(t => t.prio === 'low') }
+  ].filter(g => g.tasks.length > 0);
+
+  let rows = '';
+  groups.forEach(g => {
+    rows += `<tr><td colspan="4" style="background:${prioColor[g.key]};color:#fff;font-weight:700;font-size:12px;padding:6px 10px;letter-spacing:1px">${prioLabel[g.key].toUpperCase()} (${g.tasks.filter(t=>!t.done).length} à faire / ${g.tasks.length} total)</td></tr>`;
+    g.tasks.forEach(t => {
+      const status = t.done ? '☑' : '☐';
+      const statusStyle = t.done ? 'text-decoration:line-through;color:#999' : '';
+      const due = t.due ? t.due.split('-').reverse().join('/') : '—';
+      const time = t.time || '—';
+      rows += `<tr style="border-bottom:1px solid #eee">
+        <td style="width:24px;text-align:center;font-size:14px">${status}</td>
+        <td style="padding:6px 10px;font-size:12px;${statusStyle}">${t.text}</td>
+        <td style="width:60px;text-align:center;font-size:11px;color:#666;font-family:monospace">${time}</td>
+        <td style="width:70px;text-align:center;font-size:11px;color:#666;font-family:monospace">${due}</td>
+      </tr>`;
+    });
+  });
+
+  const win = window.open('', '_blank', 'width=800,height=900');
+  win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+  <title>Tâches — Eastrategies ERP</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 24px; color: #1a1a1a; }
+    h1 { font-size: 20px; font-weight: 800; margin: 0 0 4px; }
+    .sub { font-size: 12px; color: #666; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { background: #1a1a1a; color: #fff; padding: 7px 10px; text-align: left; font-size: 11px; letter-spacing: 0.5px; }
+    tr:nth-child(even) td { background: #f9f9f9; }
+    @media print {
+      body { padding: 12px; }
+      button { display: none !important; }
+      thead { display: table-header-group; }
+    }
+  </style>
+</head><body>
+  <h1>📋 Tâches — Eastrategies ERP</h1>
+  <div class="sub">Imprimé le ${today} — ${twTasks.filter(t=>!t.done).length} tâche(s) à faire sur ${twTasks.length} total</div>
+  <button onclick="window.print()" style="margin-bottom:16px;padding:8px 18px;background:#1a1a1a;color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:700">🖨 Imprimer / Enregistrer en PDF</button>
+  <table>
+    <thead><tr>
+      <th style="width:24px"></th>
+      <th>Tâche</th>
+      <th style="width:60px;text-align:center">Heure</th>
+      <th style="width:70px;text-align:center">Échéance</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body></html>`);
+  win.document.close();
 }
 
 function twAddInline(prio, input) {
