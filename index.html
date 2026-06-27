@@ -968,10 +968,11 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
 <!-- Barre sync multi-appareils -->
 <div style="background:#e3f2fd;border-bottom:2px solid #1565c0;padding:7px 24px;display:flex;align-items:center;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;flex-wrap:wrap;">
   <span style="color:#1565c0;font-weight:700;">☁ SYNC CLOUD</span>
-  <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="sbRestoreFromCloud()" title="Restaurer depuis le backup cloud Supabase (REMPLACE les données locales)">☁ Restaurer backup</button>
+  <span id="sync-status" style="color:#1565c0;font-size:10px;transition:color .3s">Connexion…</span>
+  <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="sbSyncNow()" title="Pousser immédiatement les données vers le cloud">↺ Sync maintenant</button>
+  <button class="btn btn-ghost btn-sm" style="border-color:#e53935;color:#e53935;font-size:10px" onclick="sbRestoreFromCloud()" title="Remplacer les données locales par la version cloud">⬇ Restaurer depuis cloud</button>
   <button class="btn btn-ghost btn-sm" style="border-color:#1565c0;color:#1565c0;font-size:10px" onclick="syncExport()">⬇ Backup JSON</button>
-  <span id="sync-status" style="color:#1565c0;font-size:10px;margin-left:8px;transition:color .3s">Connexion…</span>
-  <span style="color:#888;font-size:9px;margin-left:auto">🔒 localStorage = source de vérité — Supabase = backup uniquement — auto-save toutes les 2 min</span>
+  <span style="color:#888;font-size:9px;margin-left:auto">🔒 Auto-sync toutes les 30s · Sync au retour de focus · Chargement auto sur nouvel appareil</span>
 </div>
 
 <!-- ═══════════════════════════════════════════ DASHBOARD ═══ -->
@@ -7098,7 +7099,13 @@ function twSeedLancement() {
 plSeed();
 
 // ─────────────────────────────────────────────
-//  SUPABASE SYNC — fetch REST (sans SDK)
+//  SUPABASE SYNC v4 — SÉCURISÉ MULTI-APPAREILS
+// ─────────────────────────────────────────────
+// Stratégie :
+//   • Nouvel appareil (localStorage vide) → charge automatiquement depuis Supabase
+//   • Appareil connu → push immédiat à chaque save(), auto-save toutes les 30s
+//   • Retour de focus → compare timestamps, charge si cloud plus récent
+//   • Jamais d'écrasement si données locales plus récentes
 // ─────────────────────────────────────────────
 const SB_URL = 'https://nbxivizwlbavztliswmb.supabase.co';
 const SB_KEY = 'sb_publishable_eN67jsvRuXZ03_mP07oKlw_PWXsgF6d';
@@ -7108,22 +7115,24 @@ const SB_HEADERS = {
   'Content-Type': 'application/json'
 };
 
-// ─── SYNC MULTI-APPAREILS ────────────────────────────────────────
-// Stratégie : push immédiat à chaque modification (avec timestamp ISO),
-// rechargement intelligent au retour de focus (visibilitychange + focus).
-// Seule la version la plus récente (comparée via updated_at Supabase) est appliquée.
-
-// Dernier timestamp connu de Supabase par clé
 let _sbRemoteTs = { main: 0, tw_tasks: 0, tp_entries: 0 };
+let _sbFocusCooldown = false; // évite les appels en rafale au focus
 
 function sbStatus(msg, ok) {
   const el = document.getElementById('sync-status');
   if (!el) return;
   el.textContent = msg;
   el.style.color = ok === false ? '#e53935' : ok === true ? '#00b87a' : '#1565c0';
+  // Mettre à jour aussi le badge dans la barre de nav
+  const badge = document.getElementById('sync-cloud-status');
+  if (badge) {
+    badge.style.display = 'inline';
+    badge.textContent = ok === true ? '☁ ✓' : ok === false ? '☁ ⚠' : '☁ …';
+    badge.style.color = ok === true ? '#00b87a' : ok === false ? '#e53935' : '#1565c0';
+  }
 }
 
-// Push immédiat avec timestamp — retourne le timestamp ISO utilisé
+// ── Push vers Supabase ──────────────────────────────────────────
 async function sbPush(key, value) {
   const ts = new Date().toISOString();
   try {
@@ -7142,194 +7151,232 @@ async function sbPush(key, value) {
   return ts;
 }
 
-// ═══════════════════════════════════════════════════════
-// ARCHITECTURE SYNC v3 — localStorage = SOURCE DE VÉRITÉ
-// Supabase = BACKUP PUSH-ONLY
-// JAMAIS de chargement automatique depuis Supabase
-// Restauration uniquement via bouton explicite avec confirmation
-// ═══════════════════════════════════════════════════════
+// ── Chargement depuis Supabase (interne) ───────────────────────
+async function _sbFetch() {
+  const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,value,updated_at', {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return await res.json();
+}
 
-// Restauration depuis Supabase (MANUELLE uniquement, avec confirmation)
+function _sbApplyData(data) {
+  let restored = [];
+  (data || []).forEach(row => {
+    const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+    if (row.key === 'main' && row.value) {
+      const d = row.value;
+      if (d.prospects)    prospects    = d.prospects;
+      if (d.factures)     factures     = d.factures;
+      if (d.transactions) transactions = d.transactions;
+      localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions, saved: new Date().toISOString()}));
+      localStorage.setItem('main_saved_at', Date.now().toString());
+      _sbRemoteTs.main = remoteTs;
+      restored.push(factures.length + ' factures, ' + prospects.length + ' prospects');
+    }
+    if (row.key === 'tp_entries' && row.value) {
+      tpEntries = row.value;
+      localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
+      localStorage.setItem('tp_entries_saved_at', Date.now().toString());
+      _sbRemoteTs.tp_entries = remoteTs;
+      restored.push(tpEntries.length + ' entrées temps');
+    }
+    if (row.key === 'tw_tasks' && row.value) {
+      twTasks = row.value;
+      localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
+      localStorage.setItem('tw_tasks_saved_at', Date.now().toString());
+      _sbRemoteTs.tw_tasks = remoteTs;
+      restored.push(twTasks.length + ' tâches');
+    }
+  });
+  return restored;
+}
+
+function _sbRefreshUI() {
+  try { renderDashboard(); } catch(e) {}
+  try { renderPipeline(); } catch(e) {}
+  try { renderFacturation(); } catch(e) {}
+  try { renderTresorerie(); } catch(e) {}
+  try { tpRender(); } catch(e) {}
+  try { twRender(); } catch(e) {}
+  try { updateGlobalKPIs(); } catch(e) {}
+  try { populateClientSelects(); } catch(e) {}
+}
+
+// ── Restauration manuelle (bouton) ─────────────────────────────
 async function sbRestoreFromCloud() {
   const hasLocal = localStorage.getItem(SK) && JSON.parse(localStorage.getItem(SK) || '{}').factures?.length > 0;
   if (hasLocal) {
     const localFacs = JSON.parse(localStorage.getItem(SK) || '{}').factures || [];
     const ok = confirm(
       '⚠️ RESTAURATION DEPUIS LE CLOUD\n\n' +
-      'Votre localStorage contient ' + localFacs.length + ' factures.\n' +
-      'La restauration va REMPLACER vos données locales par la version Supabase.\n\n' +
-      'Cette action est IRRÉVERSIBLE.\n\n' +
+      'Votre appareil contient ' + localFacs.length + ' factures.\n' +
+      'La restauration va REMPLACER vos données locales par la version cloud.\n\n' +
       'Continuer ?'
     );
     if (!ok) return;
   }
-  sbStatus('↺ Restauration depuis le cloud…');
+  sbStatus('↺ Restauration…');
   try {
-    const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,value,updated_at', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    });
-    if (!res.ok) { sbStatus('⚠ Erreur ' + res.status, false); alert('Erreur de connexion à Supabase : ' + res.status); return; }
-    const data = await res.json();
+    const data = await _sbFetch();
     if (!data || !data.length) { sbStatus('☁ Aucune donnée cloud', false); alert('Aucune donnée trouvée dans le cloud.'); return; }
-    let restored = [];
-    data.forEach(row => {
-      const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
-      if (row.key === 'main' && row.value) {
-        const d = row.value;
-        if (d.prospects)    prospects    = d.prospects;
-        if (d.factures)     factures     = d.factures;
-        if (d.transactions) transactions = d.transactions;
-        localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions}));
-        localStorage.setItem('main_saved_at', Date.now().toString());
-        _sbRemoteTs.main = remoteTs;
-        restored.push(factures.length + ' factures, ' + prospects.length + ' prospects');
-      }
-      if (row.key === 'tp_entries' && row.value) {
-        tpEntries = row.value;
-        localStorage.setItem('tp_entries', JSON.stringify(tpEntries));
-        localStorage.setItem('tp_entries_saved_at', Date.now().toString());
-        _sbRemoteTs.tp_entries = remoteTs;
-        restored.push(tpEntries.length + ' entrées temps');
-      }
-      if (row.key === 'tw_tasks' && row.value) {
-        twTasks = row.value;
-        localStorage.setItem('tw_tasks', JSON.stringify(twTasks));
-        localStorage.setItem('tw_tasks_saved_at', Date.now().toString());
-        _sbRemoteTs.tw_tasks = remoteTs;
-        restored.push(twTasks.length + ' tâches');
-      }
-    });
-    renderDashboard(); renderPipeline(); renderFacturation(); renderTresorerie();
-    tpRender(); twRender(); updateGlobalKPIs(); populateClientSelects();
+    const restored = _sbApplyData(data);
+    _sbRefreshUI();
     sbStatus('☁ Restauré ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
-    showToast('✅ Restauré depuis le cloud : ' + restored.join(', '));
+    showToast('✅ Restauré depuis le cloud : ' + (restored.join(', ') || 'aucune donnée'));
   } catch(e) {
     sbStatus('⚠ Hors ligne', false);
     alert('Erreur de connexion : ' + e.message);
   }
 }
 
-// Alias pour compatibilité avec le bouton HTML existant
-async function sbLoadAll(forceApply) {
-  // En mode push-only, sbLoadAll ne charge JAMAIS automatiquement
-  // Seul sbRestoreFromCloud peut charger depuis Supabase
+// ── Chargement initial au démarrage ────────────────────────────
+// Si localStorage vide → charge depuis Supabase automatiquement (nouvel appareil)
+// Si localStorage présent → compare timestamps, charge si cloud plus récent
+async function sbLoadAll() {
+  const hasLocalData = !!localStorage.getItem('main_saved_at');
+  const mainLocalTs  = parseInt(localStorage.getItem('main_saved_at') || '0');
+  try {
+    sbStatus('↺ Vérification cloud…');
+    const data = await _sbFetch();
+    if (!data || !data.length) {
+      // Aucune donnée cloud — on garde le local
+      sbInitialLoading = false;
+      sbStatus('☁ Prêt (local)', true);
+      return;
+    }
+    // Trouver le timestamp cloud de 'main'
+    const mainRow = data.find(r => r.key === 'main');
+    const mainRemoteTs = mainRow?.updated_at ? new Date(mainRow.updated_at).getTime() : 0;
+    _sbRemoteTs.main = mainRemoteTs;
+
+    if (!hasLocalData) {
+      // ── CAS 1 : Nouvel appareil — localStorage vide → charger depuis cloud ──
+      console.log('[Sync] Nouvel appareil détecté — chargement depuis Supabase');
+      sbStatus('↺ Chargement initial depuis le cloud…');
+      const restored = _sbApplyData(data);
+      _sbRefreshUI();
+      sbStatus('☁ Chargé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
+      if (restored.length) showToast('📱 Données chargées depuis le cloud : ' + restored.join(', '));
+    } else if (mainRemoteTs > mainLocalTs + 5000) {
+      // ── CAS 2 : Cloud plus récent (autre appareil a modifié) → charger silencieusement ──
+      console.log('[Sync] Cloud plus récent (' + new Date(mainRemoteTs).toLocaleTimeString() + ') — rechargement');
+      sbStatus('↺ Mise à jour depuis un autre appareil…');
+      const restored = _sbApplyData(data);
+      _sbRefreshUI();
+      sbStatus('☁ Mis à jour ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
+      showToast('📱 Données mises à jour depuis un autre appareil');
+    } else {
+      // ── CAS 3 : Local à jour ou plus récent → pousser vers cloud ──
+      console.log('[Sync] Local à jour — push vers Supabase');
+      sbStatus('☁ Prêt', true);
+      // Push immédiat si données locales plus récentes
+      if (mainLocalTs > 0 && mainLocalTs > mainRemoteTs) {
+        sbPush('main', {prospects, factures, transactions});
+      }
+    }
+  } catch(e) {
+    console.warn('[Sync] Hors ligne au démarrage :', e.message);
+    sbStatus('⚠ Hors ligne — données locales', false);
+  }
   sbInitialLoading = false;
-  sbStatus('☁ Prêt', true);
 }
 
-// sbSyncOnFocus SUPPRIMÉE - causait des pertes de données en écrasant les données locales
-// La fonction est conservée mais ne fait plus rien
-async function sbSyncOnFocus() { return; // désactivée
-  if (sbInitialLoading) return;
-  if (sbInitialLoading) return;
+// ── Sync au retour de focus (onglet/fenêtre) ───────────────────
+async function sbSyncOnFocus() {
+  if (sbInitialLoading || _sbFocusCooldown) return;
+  _sbFocusCooldown = true;
+  setTimeout(() => { _sbFocusCooldown = false; }, 10000); // cooldown 10s
   try {
     const res = await fetch(SB_URL + '/rest/v1/sync_data?select=key,updated_at', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
     });
     if (!res.ok) return;
     const data = await res.json();
-    let needLoad = false;
-    (data || []).forEach(row => {
-      const remoteTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
-      const localTs = parseInt(localStorage.getItem((row.key === 'main' ? 'main' : row.key) + '_saved_at') || '0');
-      if (remoteTs > localTs + 2000) { // 2s de tolérance pour éviter les faux positifs
-        needLoad = true;
-        console.log('[Sync Focus] ' + row.key + ' plus récent sur Supabase — rechargement');
-      }
-    });
-    if (needLoad) {
-      sbStatus('↺ Mise à jour depuis un autre appareil…');
-      await sbLoadAll();
-      showToast('📱 Données mises à jour depuis un autre appareil');
+    const mainRow = (data || []).find(r => r.key === 'main');
+    if (!mainRow) return;
+    const remoteTs = mainRow.updated_at ? new Date(mainRow.updated_at).getTime() : 0;
+    const localTs  = parseInt(localStorage.getItem('main_saved_at') || '0');
+    if (remoteTs > localTs + 5000) {
+      // Cloud plus récent de plus de 5s → charger
+      console.log('[Focus Sync] Cloud plus récent — rechargement silencieux');
+      sbStatus('↺ Mise à jour…');
+      const fullData = await _sbFetch();
+      _sbApplyData(fullData);
+      _sbRefreshUI();
+      sbStatus('☁ Mis à jour ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
+      showToast('📱 Données synchronisées depuis un autre appareil');
     }
-  } catch(e) { /* silencieux */ }
+  } catch(e) { /* silencieux au focus */ }
 }
 
-// Sauvegarde silencieuse de sécurité toutes les 2 min
-// BLOQUE si sbInitialLoading est encore vrai (Supabase pas encore chargé)
-// Ne pousse vers Supabase QUE si les données locales sont plus récentes que la version cloud
+// ── Auto-save toutes les 30s ────────────────────────────────────
 function sbAutoSave() {
-  // GARDE-FOU CRITIQUE : ne jamais pousser avant que Supabase ait chargé
-  if (sbInitialLoading) {
-    console.log('[AutoSave] Bloqué : chargement initial Supabase pas encore terminé');
-    return;
-  }
-  const now = Date.now();
-  // main (prospects/factures/transactions)
+  if (sbInitialLoading) return;
   const mainLocalTs  = parseInt(localStorage.getItem('main_saved_at') || '0');
   const mainRemoteTs = _sbRemoteTs.main || 0;
-  // Ne pousser QUE si localTs > 0 (données réellement saisies, pas des SEED)
-  // ET si localTs >= remoteTs (données locales plus récentes ou égales)
   if (mainLocalTs > 0 && mainLocalTs >= mainRemoteTs) {
-    try {
-      localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions, saved: new Date().toISOString()}));
-    } catch(e) {}
+    try { localStorage.setItem(SK, JSON.stringify({prospects, factures, transactions, saved: new Date().toISOString()})); } catch(e) {}
     sbPush('main', {prospects, factures, transactions});
   }
-  // tp_entries
   if (tpEntries && tpEntries.length) {
-    const tpLocalTs  = parseInt(localStorage.getItem('tp_entries_saved_at') || '0');
-    const tpRemoteTs = _sbRemoteTs.tp_entries || 0;
-    if (tpLocalTs > 0 && tpLocalTs >= tpRemoteTs) {
-      sbPush('tp_entries', tpEntries);
-    }
+    const tpLocalTs = parseInt(localStorage.getItem('tp_entries_saved_at') || '0');
+    if (tpLocalTs > 0 && tpLocalTs >= (_sbRemoteTs.tp_entries || 0)) sbPush('tp_entries', tpEntries);
   }
-  // tw_tasks
   if (twTasks && twTasks.length) {
-    const twLocalTs  = parseInt(localStorage.getItem('tw_tasks_saved_at') || '0');
-    const twRemoteTs = _sbRemoteTs.tw_tasks || 0;
-    if (twLocalTs > 0 && twLocalTs >= twRemoteTs) {
-      sbPush('tw_tasks', twTasks);
-    }
+    const twLocalTs = parseInt(localStorage.getItem('tw_tasks_saved_at') || '0');
+    if (twLocalTs > 0 && twLocalTs >= (_sbRemoteTs.tw_tasks || 0)) sbPush('tw_tasks', twTasks);
   }
   const el = document.getElementById('last-save');
   if (el) el.textContent = 'Auto-sauvegardé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 }
 
-// Initialisation : chargement initial + seed après Supabase + auto-save
+// ── Initialisation au chargement de la page ────────────────────
 window.addEventListener('load', function() {
-  sbStatus('↺ Chargement depuis le cloud…');
+  sbStatus('↺ Connexion au cloud…');
   sbLoadAll().then(() => {
-    // Seed plan de lancement APRÈS le chargement Supabase
     if (!localStorage.getItem('tw_lancement_seeded_v1')) {
       twSeedLancement();
       localStorage.setItem('tw_lancement_seeded_v1', '1');
     }
-    // Auto-save de sécurité toutes les 2 min
-    setInterval(sbAutoSave, 120000);
+    setInterval(sbAutoSave, 30000); // auto-save toutes les 30s (au lieu de 2 min)
   }).catch(() => {
     sbInitialLoading = false;
-    // Seed même en cas d'erreur Supabase
     if (!localStorage.getItem('tw_lancement_seeded_v1')) {
       twSeedLancement();
       localStorage.setItem('tw_lancement_seeded_v1', '1');
     }
-    setInterval(sbAutoSave, 120000);
+    setInterval(sbAutoSave, 30000);
   });
 });
 
-// Sync automatique au focus SUPPRIMÉE (causait des pertes de données)
-// La sync multi-appareils est uniquement manuelle via le bouton "Forcer sync"
+// ── Sync au retour de focus / visibilité ───────────────────────
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible') sbSyncOnFocus();
+});
+window.addEventListener('focus', function() {
+  sbSyncOnFocus();
+});
 
-// Forcer sync sécurisé : demande confirmation si données locales plus récentes
+// ── Forcer sync manuel (bouton) ────────────────────────────────
 async function sbForceSyncSafe() {
-  const mainLocalTs = parseInt(localStorage.getItem('main_saved_at') || '0');
-  const mainRemoteTs = _sbRemoteTs.main || 0;
-  if (mainLocalTs > mainRemoteTs + 5000) {
-    // Données locales plus récentes : risque de perte
-    const ok = confirm(
-      '⚠️ ATTENTION\n\n' +
-      'Vos données locales sont plus récentes que Supabase.\n' +
-      'Forcer la sync va REMPLACER votre travail actuel par la version cloud.\n\n' +
-      'Dernière sauvegarde locale : ' + new Date(mainLocalTs).toLocaleTimeString('fr-FR') + '\n' +
-      'Dernière version Supabase : ' + (mainRemoteTs ? new Date(mainRemoteTs).toLocaleTimeString('fr-FR') : 'inconnue') + '\n\n' +
-      'Continuer quand même ?'
-    );
-    if (!ok) return;
+  showToast('↺ Synchronisation en cours…');
+  await sbRestoreFromCloud();
+}
+
+// Push immédiat depuis le bouton ↺ Sync maintenant
+async function sbSyncNow() {
+  if (sbInitialLoading) { showToast('⚠ Chargement en cours, patientez…'); return; }
+  sbStatus('↺ Push en cours…');
+  try {
+    await sbPush('main', {prospects, factures, transactions});
+    if (tpEntries && tpEntries.length) await sbPush('tp_entries', tpEntries);
+    if (twTasks && twTasks.length) await sbPush('tw_tasks', twTasks);
+    showToast('✅ Données envoyées vers le cloud');
+  } catch(e) {
+    showToast('⚠ Erreur de sync : ' + e.message);
+    sbStatus('⚠ Hors ligne', false);
   }
-  showToast('↺ Rechargement depuis le cloud…');
-  await sbLoadAll(true);
-  showToast('✅ Données rechargées depuis Supabase');
 }
 
 // ─────────────────────────────────────────────
