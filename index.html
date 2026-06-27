@@ -7188,6 +7188,12 @@ function _sbApplyData(data) {
       _sbRemoteTs.tw_tasks = remoteTs;
       restored.push(twTasks.length + ' tâches');
     }
+    if (row.key === 'crm' && row.value && row.value.crm_projects) {
+      crmProjects = row.value.crm_projects;
+      localStorage.setItem('crm_projects', JSON.stringify(crmProjects));
+      localStorage.setItem('crm_saved_at', Date.now().toString());
+      restored.push(crmProjects.length + ' projets CRM');
+    }
   });
   return restored;
 }
@@ -7199,6 +7205,7 @@ function _sbRefreshUI() {
   try { renderTresorerie(); } catch(e) {}
   try { tpRender(); } catch(e) {}
   try { twRender(); } catch(e) {}
+  try { crmRender(); } catch(e) {}
   try { updateGlobalKPIs(); } catch(e) {}
   try { populateClientSelects(); } catch(e) {}
 }
@@ -8446,6 +8453,156 @@ function crmParseDevisText(text, file) {
   // Ouvrir la fiche pour vérification
   setTimeout(() => crmOpenModal(projId), 400);
 }
+
+// ─────────────────────────────────────────────
+//  SEED CRM — 3 devis Novastea (juin 2026)
+// ─────────────────────────────────────────────
+(function crmSeedDevis() {
+  // Ne seeder qu'une seule fois
+  if (localStorage.getItem('crm_devis_seeded_v1')) return;
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // ── Devis 1 : LABORATOIRES FILL-MED FRANCE (DEV-2026-9) ──
+  const p1id = nextProspectId();
+  const crm1 = {
+    id: 'CRM_DEV_2026_9',
+    pipeline_id: p1id,
+    company: 'LABORATOIRES FILL-MED FRANCE',
+    stage: 'devis_envoye',
+    amount: 7800,
+    proba: 50,
+    responsable: 'Marc Huot',
+    source: 'Devis Novastea',
+    last_activity: '2026-06-16',
+    notes: 'N° devis : DEV-2026-9\nObjet : Recherche & identification de distributeurs — Roumanie, Bulgarie, Moldavie\nMontant HT : 7 800,00 € | TTC : 9 360,00 €\nAcompte 40% à la commande. Paiement 30 jours.\nNDA requis avant partage des distributeurs identifiés.\nDate d\'expiration : 23 juin 2026.',
+    contacts: [{ id: 'C1', name: 'Julian Williamson', role: 'Contact', email: 'julian.williamson@fillmed.com', phone: '' }],
+    history: [
+      { id: 'H1', type: 'devis', date: '2026-06-16', text: 'Devis DEV-2026-9 envoyé — 9 360,00 € TTC' }
+    ],
+    tasks: [
+      { id: 'T1', text: 'Relancer avant expiration du devis DEV-2026-9', due: '2026-06-23', prio: 'haute', done: false }
+    ],
+    pdf_files: []
+  };
+  prospects.push({
+    id: p1id,
+    entreprise: 'LABORATOIRES FILL-MED FRANCE',
+    contact: 'Julian Williamson',
+    email: 'julian.williamson@fillmed.com',
+    telephone: '',
+    source: 'Devis Novastea',
+    statut: 'Devis envoyé',
+    temperature: 'Chaud',
+    num_devis: 'DEV-2026-9',
+    date_devis: '2026-06-16',
+    date_relance: '2026-06-23',
+    responsable: 'Marc Huot',
+    notes: crm1.notes,
+    montant: 7800,
+    proba: 50,
+    realisation: 0,
+    files: [],
+    pdf_files: []
+  });
+
+  // ── Devis 2 : SAS EUR'OHM (DEV-2026-8) ──
+  const p2id = nextProspectId();
+  const crm2 = {
+    id: 'CRM_DEV_2026_8',
+    pipeline_id: p2id,
+    company: "SAS EUR'OHM",
+    stage: 'devis_envoye',
+    amount: 9700,
+    proba: 50,
+    responsable: 'Marc Huot',
+    source: 'Devis Novastea',
+    last_activity: '2026-06-16',
+    notes: "N° devis : DEV-2026-8\nObjet : Recherche, identification et accompagnement fournisseurs de vis (boîtes murales) — sourcing Europe centrale et orientale (Roumanie / Bulgarie)\nMontant HT : 9 700,00 € | TTC : 11 640,00 €\nAcompte 30% à la commande. Paiement 30 jours.\nDélai global estimé : 6 à 8 semaines à compter de la commande.\nDate d'expiration : 16 juillet 2026.",
+    contacts: [{ id: 'C1', name: 'Eric Lhote', role: 'Dirigeant', email: 'eric.lhote@eur-ohm.com', phone: '' }],
+    history: [
+      { id: 'H1', type: 'devis', date: '2026-06-16', text: "Devis DEV-2026-8 envoyé — 11 640,00 € TTC" }
+    ],
+    tasks: [
+      { id: 'T1', text: "Relancer avant expiration du devis DEV-2026-8", due: '2026-07-16', prio: 'haute', done: false }
+    ],
+    pdf_files: []
+  };
+  prospects.push({
+    id: p2id,
+    entreprise: "SAS EUR'OHM",
+    contact: 'Eric Lhote',
+    email: 'eric.lhote@eur-ohm.com',
+    telephone: '',
+    source: 'Devis Novastea',
+    statut: 'Devis envoyé',
+    temperature: 'Chaud',
+    num_devis: 'DEV-2026-8',
+    date_devis: '2026-06-16',
+    date_relance: '2026-07-16',
+    responsable: 'Marc Huot',
+    notes: crm2.notes,
+    montant: 9700,
+    proba: 50,
+    realisation: 0,
+    files: [],
+    pdf_files: []
+  });
+
+  // ── Devis 3 : SAS TESTE (DEV-2026-7) ──
+  const p3id = nextProspectId();
+  const crm3 = {
+    id: 'CRM_DEV_2026_7',
+    pipeline_id: p3id,
+    company: 'SAS TESTE',
+    stage: 'devis_envoye',
+    amount: 3250,
+    proba: 50,
+    responsable: 'Marc Huot',
+    source: 'Devis Novastea',
+    last_activity: '2026-06-16',
+    notes: 'N° devis : DEV-2026-7\nObjet : Prestation de recrutement en Roumanie — Fraiseur-Aléseur sur Commande Numérique (machines TOS WHN 13 / WRD 130)\nMontant HT : 3 250,00 € | TTC : 3 900,00 €\nAcompte 40% à la commande (1 843,20 € HT), solde 60% à l\'entrée en fonction.\nGarantie de remplacement 2 mois incluse.\nDate d\'expiration : 23 juin 2026.',
+    contacts: [{ id: 'C1', name: 'Jean François Teste', role: 'Dirigeant', email: 'jft@teste-mecanique.eu', phone: '+336.80.74.36.80' }],
+    history: [
+      { id: 'H1', type: 'devis', date: '2026-06-16', text: 'Devis DEV-2026-7 envoyé — 3 900,00 € TTC' }
+    ],
+    tasks: [
+      { id: 'T1', text: 'Relancer avant expiration du devis DEV-2026-7', due: '2026-06-23', prio: 'haute', done: false }
+    ],
+    pdf_files: []
+  };
+  prospects.push({
+    id: p3id,
+    entreprise: 'SAS TESTE',
+    contact: 'Jean François Teste',
+    email: 'jft@teste-mecanique.eu',
+    telephone: '+336.80.74.36.80',
+    source: 'Devis Novastea',
+    statut: 'Devis envoyé',
+    temperature: 'Chaud',
+    num_devis: 'DEV-2026-7',
+    date_devis: '2026-06-16',
+    date_relance: '2026-06-23',
+    responsable: 'Marc Huot',
+    notes: crm3.notes,
+    montant: 3250,
+    proba: 50,
+    realisation: 0,
+    files: [],
+    pdf_files: []
+  });
+
+  // Ajouter au CRM
+  [crm1, crm2, crm3].forEach(c => {
+    if (!crmProjects.find(p => p.id === c.id)) crmProjects.push(c);
+  });
+
+  // Sauvegarder
+  save();
+  crmSave();
+  localStorage.setItem('crm_devis_seeded_v1', '1');
+  console.log('[Seed] 3 devis Novastea injectés dans le CRM');
+})();
 
 tpLoad();
 // Pré-remplir la date du jour
