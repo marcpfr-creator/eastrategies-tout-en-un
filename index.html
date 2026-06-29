@@ -7943,16 +7943,17 @@ function crmOpenModal(proj, defaultStage) {
       <div class="crm-section-title">Notes & Demandes</div>
       <textarea class="crm-textarea" id="crm-f-notes" rows="4" placeholder="Besoins exprimés, contraintes, points clés…">${escHtml(proj.notes)}</textarea>
     </div>
-    <!-- Pièces jointes PDF -->
+    <!-- Pièces jointes -->
     <div>
       <div class="crm-section-title">📎 Pièces jointes</div>
       <div id="crm-pdf-list">${crmRenderPdfList(proj.pdf_files || [])}</div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:10px">
         <label class="btn btn-outline btn-sm" style="cursor:pointer">
-          📂 Joindre un PDF
-          <input type="file" accept=".pdf" style="display:none" onchange="crmUploadPdf(this)">
+          📂 Joindre un fichier
+          <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.zip,.txt,.csv" style="display:none" onchange="crmUploadPdf(this)">
         </label>
         <span id="crm-pdf-uploading" style="font-size:11px;color:var(--muted);display:none">⏳ Upload en cours…</span>
+        <span style="font-size:10px;color:var(--muted)">PDF, Word, Excel, images, ZIP… (max 10 Mo)</span>
       </div>
     </div>
     <!-- Actions -->
@@ -8066,12 +8067,15 @@ function crmToggleArchives() {
 // ── Pièces jointes PDF CRM ───────────────────────────────
 function crmRenderPdfList(pdfs) {
   if (!pdfs || pdfs.length === 0) return '<div style="color:var(--muted);font-size:11px;padding:4px 0">Aucune pièce jointe</div>';
-  return pdfs.map((pf, i) =>
-    `<a href="${pf.url}" target="_blank" class="file-pill" style="text-decoration:none" title="${pf.name}">
-      📎<span class="fp-name">${pf.name}</span>
+  return pdfs.map((pf, i) => {
+    const ext = (pf.name || '').split('.').pop().toLowerCase();
+    const icon = pf.icon || ({ pdf:'📄', doc:'📄', docx:'📄', xls:'📊', xlsx:'📊', ppt:'📊', pptx:'📊',
+                  jpg:'🖼', jpeg:'🖼', png:'🖼', gif:'🖼', zip:'🗂', txt:'📝', csv:'📝' }[ext] || '📎');
+    return `<a href="${pf.url}" target="_blank" class="file-pill" style="text-decoration:none" title="${pf.name}">
+      ${icon}<span class="fp-name">${pf.name}</span>
       <span class="fp-del" onclick="event.preventDefault();event.stopPropagation();crmRemovePdf(${i})">×</span>
-    </a>`
-  ).join('');
+    </a>`;
+  }).join('');
 }
 
 async function crmUploadPdf(input) {
@@ -8082,20 +8086,26 @@ async function crmUploadPdf(input) {
   const uploading = document.getElementById('crm-pdf-uploading');
   if (uploading) uploading.style.display = 'inline';
   const SUPABASE_URL = 'https://nbxivizwlbavztliswmb.supabase.co';
-  const SUPABASE_KEY = typeof SK !== 'undefined' ? SK : '';
+  const SUPABASE_KEY = SB_KEY || '';
   const fileName = `crm/${window._crmCurrentProj.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+  // Déterminer le Content-Type réel du fichier
+  const contentType = file.type || 'application/octet-stream';
+  // Icône selon type
+  const ext = file.name.split('.').pop().toLowerCase();
+  const icon = { pdf:'📄', doc:'📄', docx:'📄', xls:'📊', xlsx:'📊', ppt:'📊', pptx:'📊',
+                 jpg:'🖼', jpeg:'🖼', png:'🖼', gif:'🖼', zip:'🗂', txt:'📝', csv:'📝' }[ext] || '📎';
   try {
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/task-pdfs/${fileName}`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/pdf', 'x-upsert': 'true' },
+      headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': contentType, 'x-upsert': 'true' },
       body: file
     });
     if (!res.ok) throw new Error('Upload échoué : ' + res.status);
     const url = `${SUPABASE_URL}/storage/v1/object/public/task-pdfs/${fileName}`;
     window._crmCurrentProj.pdf_files = window._crmCurrentProj.pdf_files || [];
-    window._crmCurrentProj.pdf_files.push({ name: file.name, url, path: fileName });
+    window._crmCurrentProj.pdf_files.push({ name: file.name, url, path: fileName, icon });
     document.getElementById('crm-pdf-list').innerHTML = crmRenderPdfList(window._crmCurrentProj.pdf_files);
-    showToast('📎 PDF joint avec succès');
+    showToast(icon + ' Fichier joint : ' + file.name);
   } catch(e) {
     showToast('⚠ Erreur upload : ' + e.message);
   } finally {
