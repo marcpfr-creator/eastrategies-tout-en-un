@@ -7195,12 +7195,26 @@ async function sbLoadAll() {
       sbStatus('☁ Mis à jour ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
       showToast('📱 Données mises à jour depuis un autre appareil');
     } else {
-      // ── CAS 3 : Local à jour ou plus récent → pousser vers cloud ──
-      console.log('[Sync] Local à jour — push vers Supabase');
-      sbStatus('☁ Prêt', true);
-      // Push immédiat si données locales plus récentes
-      if (mainLocalTs > 0 && mainLocalTs > mainRemoteTs) {
-        sbPush('main', {prospects, factures, transactions});
+      // ── CAS 3 : Local à jour ou plus récent ──
+      // Vérifier si les données locales semblent être des SEED (sans montants)
+      const localFacsWithMontant = factures.filter(f => (f.montant_ht||0) > 0).length;
+      const localProsWithMontant = prospects.filter(p => (p.montant||0) > 0).length;
+      const looksLikeSeed = localFacsWithMontant === 0 && localProsWithMontant === 0 && mainRow;
+      if (looksLikeSeed) {
+        // Données locales sans montants = probablement des SEED → forcer rechargement cloud
+        console.log('[Sync] Données locales sans montants détectées — rechargement forcé depuis Supabase');
+        sbStatus('↺ Rechargement des données réelles…');
+        const restored = _sbApplyData(data);
+        _sbRefreshUI();
+        sbStatus('☁ Chargé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}), true);
+        if (restored.length) showToast('✅ Données restaurées depuis le cloud : ' + restored.join(', '));
+      } else {
+        console.log('[Sync] Local à jour — push vers Supabase');
+        sbStatus('☁ Prêt', true);
+        // Push immédiat si données locales plus récentes
+        if (mainLocalTs > 0 && mainLocalTs > mainRemoteTs) {
+          sbPush('main', {prospects, factures, transactions});
+        }
       }
     }
   } catch(e) {
