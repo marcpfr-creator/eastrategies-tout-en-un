@@ -3291,6 +3291,25 @@ function renderResultat(){ /* remplacé par finRenderCR */ }
 // ═══════════════════════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════════════════════
+// Vider le localStorage s'il contient des données SEED (sans montants)
+// pour forcer le rechargement depuis Supabase
+(function() {
+  try {
+    const raw = localStorage.getItem(SK);
+    if (raw) {
+      const d = JSON.parse(raw);
+      const facs = d.factures || [];
+      const pros = d.prospects || [];
+      const hasMontants = facs.some(f => (f.montant_ht||0) > 0) || pros.some(p => (p.montant||0) > 0);
+      if (!hasMontants && facs.length > 0) {
+        // Données sans montants = SEED corrompues → vider pour forcer rechargement Supabase
+        console.log('[Boot] Données SEED détectées dans localStorage — réinitialisation');
+        localStorage.removeItem(SK);
+        localStorage.removeItem('main_saved_at');
+      }
+    }
+  } catch(e) {}
+})();
 load();
 loadSoldesInitiaux();
 finLoad();
