@@ -955,8 +955,7 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
   <button class="tab-btn active" onclick="switchTab('dashboard',this)">📊 Dashboard</button>
   <button class="tab-btn" onclick="switchTab('pipeline',this)">📋 Pipeline</button>
   <button class="tab-btn" onclick="switchTab('facturation',this)">🧾 Facturation</button>
-  <button class="tab-btn" onclick="switchTab('tresorerie',this)">💰 Trésorerie</button>
-  <button class="tab-btn" onclick="switchTab('resultat',this)">📈 Résultat Annuel</button>
+  <button class="tab-btn" onclick="switchTab('finance',this)">💶 Finance</button>
   <button class="tab-btn" id="tab-rappels-btn" onclick="switchTab('rappels',this)">📋 Tâches Semaine</button>
   <button class="tab-btn" onclick="switchTab('obsidian',this)">🔗 Obsidian</button>
   <button class="tab-btn" onclick="switchTab('weekly',this)">📓 Weekly</button>
@@ -1119,198 +1118,274 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════ TRÉSORERIE UNIFIÉE ═══ -->
-<div class="section" id="section-tresorerie">
+<!-- ═══════════════════════════════════════════ FINANCE PENNYLANE ═══ -->
+<div class="section" id="section-finance">
+<style>
+/* ── FINANCE MODULE STYLES ── */
+.fin-hero{background:var(--ink);color:var(--bg);padding:24px 28px;border:1.5px solid var(--ink);box-shadow:var(--shadow-lg);margin-bottom:20px;position:relative;overflow:hidden;}
+.fin-hero::after{content:'💶';position:absolute;right:24px;top:50%;transform:translateY(-50%);font-size:56px;opacity:.08;}
+.fin-hero h2{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--accent);margin-bottom:4px;}
+.fin-hero p{font-size:11px;opacity:.7;margin:0;}
+.fin-tabs{display:flex;gap:0;border-bottom:2px solid var(--ink);margin-bottom:20px;overflow-x:auto;}
+.fin-tab{padding:8px 18px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;border:none;background:transparent;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all .15s;}
+.fin-tab.active{color:var(--ink);border-bottom-color:var(--ink);}
+.fin-tab:hover{color:var(--ink);}
+.fin-view{display:none;}
+.fin-view.active{display:block;}
+.fin-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
+.fin-kpi{background:var(--card);border:1.5px solid var(--ink);box-shadow:var(--shadow);padding:14px 16px;position:relative;}
+.fin-kpi-label{font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.fin-kpi-value{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;}
+.fin-kpi-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+.fin-kpi-accent{position:absolute;top:0;left:0;width:3px;height:100%;}
+.fin-table-wrap{overflow-x:auto;margin-bottom:20px;}
+.fin-table{width:100%;border-collapse:collapse;font-size:12px;}
+.fin-table th{background:var(--ink);color:var(--bg);padding:8px 10px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;white-space:nowrap;}
+.fin-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.fin-table tr:hover td{background:var(--bg);}
+.fin-badge{display:inline-block;padding:2px 8px;font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace;border:1.5px solid;}
+.fin-badge.encaissee{color:#2e7d32;border-color:#2e7d32;background:#e8f5e9;}
+.fin-badge.en-retard{color:#c62828;border-color:#c62828;background:#ffebee;}
+.fin-badge.a-venir{color:#e65100;border-color:#e65100;background:#fff3e0;}
+.fin-badge.annulee{color:#757575;border-color:#9e9e9e;background:#f5f5f5;}
+.fin-badge.credit{color:#1565c0;border-color:#1565c0;background:#e3f2fd;}
+.fin-badge.debit{color:#c62828;border-color:#c62828;background:#ffebee;}
+.fin-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
+.fin-filter-label{font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--muted);font-weight:700;}
+.fin-import-zone{border:2px dashed var(--ink);padding:24px;text-align:center;cursor:pointer;background:var(--bg);transition:all .15s;margin-bottom:20px;position:relative;}
+.fin-import-zone:hover{background:var(--card);}
+.fin-import-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.fin-import-zone h3{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;margin-bottom:6px;}
+.fin-import-zone p{font-size:11px;color:var(--muted);margin:0;}
+.fin-import-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px;}
+.fin-import-card{background:var(--card);border:1.5px solid var(--ink);padding:16px;cursor:pointer;transition:all .15s;position:relative;}
+.fin-import-card:hover{box-shadow:var(--shadow-lg);}
+.fin-import-card h4{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;margin-bottom:4px;}
+.fin-import-card p{font-size:10px;color:var(--muted);margin:0 0 10px;}
+.fin-import-card .fin-import-status{font-size:10px;font-family:'IBM Plex Mono',monospace;font-weight:700;}
+.fin-import-card input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.fin-cr-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px;}
+.fin-cr-table th{background:var(--ink);color:var(--bg);padding:8px 12px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;}
+.fin-cr-table td{padding:8px 12px;border-bottom:1px solid var(--border);}
+.fin-cr-table .fin-cr-total{font-weight:800;background:var(--bg);border-top:2px solid var(--ink);}
+.fin-cr-table .fin-cr-section{background:var(--ink);color:var(--bg);font-family:'Syne',sans-serif;font-weight:800;font-size:11px;}
+.fin-cr-table .fin-cr-result{background:var(--accent);color:var(--ink);font-weight:800;font-size:13px;}
+.fin-chart-wrap{background:var(--card);border:1.5px solid var(--ink);padding:16px;margin-bottom:20px;}
+.fin-chart-wrap h4{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;margin-bottom:12px;}
+.fin-bar-chart{display:flex;align-items:flex-end;gap:6px;height:120px;padding-bottom:4px;}
+.fin-bar-col{display:flex;flex-direction:column;align-items:center;flex:1;gap:2px;}
+.fin-bar{width:100%;min-width:20px;transition:height .3s;cursor:default;position:relative;}
+.fin-bar:hover::after{content:attr(data-val);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:2px 6px;font-size:9px;white-space:nowrap;pointer-events:none;}
+.fin-bar-label{font-size:9px;font-family:'IBM Plex Mono',monospace;color:var(--muted);text-align:center;}
+.fin-empty{text-align:center;padding:40px 20px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;}
+.fin-empty-icon{font-size:36px;margin-bottom:8px;}
+.fin-section-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--ink);}
+.fin-row-pos{color:#2e7d32;font-weight:700;}
+.fin-row-neg{color:#c62828;font-weight:700;}
+</style>
 
-  <!-- ── Ligne 1 : Taux de change + Date de référence ── -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-    <div class="taux-box" style="margin-bottom:0">
-      <div style="font-family:'Syne',sans-serif;font-size:12px;font-weight:700;margin-bottom:10px;">Taux de change</div>
-      <div class="taux-row">
-        <div class="taux-lbl">1 RON = <strong>EUR</strong></div>
-        <input class="taux-input" id="taux-ron-eur" type="number" step="0.001" value="0.201" oninput="renderTresorerie()">
-        <span style="font-size:10px;color:var(--muted)">≈ 1 EUR = <span id="taux-eur-ron-display">4.98</span> RON</span>
+  <!-- Hero -->
+  <div class="fin-hero">
+    <h2>💶 Finance — Tableau de bord Pennylane</h2>
+    <p>Importez vos exports Pennylane pour une vue financière complète : factures, trésorerie, compte de résultat</p>
+  </div>
+
+  <!-- Sous-onglets -->
+  <div class="fin-tabs">
+    <button class="fin-tab active" onclick="finSwitchTab('overview',this)">📊 Vue d'ensemble</button>
+    <button class="fin-tab" onclick="finSwitchTab('factures',this)">🧾 Factures</button>
+    <button class="fin-tab" onclick="finSwitchTab('tresorerie',this)">💰 Trésorerie</button>
+    <button class="fin-tab" onclick="finSwitchTab('cr',this)">📈 Compte de résultat</button>
+    <button class="fin-tab" onclick="finSwitchTab('import',this)">📥 Import Pennylane</button>
+  </div>
+
+  <!-- ── VUE D'ENSEMBLE ── -->
+  <div class="fin-view active" id="fin-view-overview">
+    <div class="fin-kpis" id="fin-kpis-overview"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div class="fin-chart-wrap">
+        <h4>CA mensuel HT (€)</h4>
+        <div class="fin-bar-chart" id="fin-chart-ca"></div>
+      </div>
+      <div class="fin-chart-wrap">
+        <h4>Flux de trésorerie mensuel (€)</h4>
+        <div class="fin-bar-chart" id="fin-chart-flux"></div>
       </div>
     </div>
-    <!-- Date de référence -->
-    <div class="taux-box" style="margin-bottom:0">
-      <div style="font-family:'Syne',sans-serif;font-size:12px;font-weight:700;margin-bottom:10px;">Date de référence des soldes</div>
-      <div class="taux-row">
-        <div class="taux-lbl" style="width:auto;margin-right:8px;">Relevé bancaire du</div>
-        <input class="si-date-input" id="si-ref-date" type="date" value="2026-01-01" oninput="saveSoldesInitiaux();renderTresorerie()">
-        <span style="font-size:10px;color:var(--muted);margin-left:8px;">— Les transactions antérieures à cette date sont exclues du calcul.</span>
+    <div class="fin-section-title">Top clients (CA HT)</div>
+    <div id="fin-top-clients"></div>
+  </div>
+
+  <!-- ── FACTURES ── -->
+  <div class="fin-view" id="fin-view-factures">
+    <div class="fin-filters">
+      <span class="fin-filter-label">Filtrer :</span>
+      <select id="fin-f-statut" onchange="finRenderFactures()" style="font-size:11px;padding:4px 8px;border:1.5px solid var(--ink);background:var(--bg)">
+        <option value="">Tous statuts</option>
+        <option value="Encaissée">Encaissée</option>
+        <option value="À venir">À venir</option>
+        <option value="En retard">En retard</option>
+        <option value="Annulée">Annulée</option>
+      </select>
+      <select id="fin-f-client" onchange="finRenderFactures()" style="font-size:11px;padding:4px 8px;border:1.5px solid var(--ink);background:var(--bg)">
+        <option value="">Tous clients</option>
+      </select>
+      <select id="fin-f-mois" onchange="finRenderFactures()" style="font-size:11px;padding:4px 8px;border:1.5px solid var(--ink);background:var(--bg)">
+        <option value="">Tous mois</option>
+        <option value="01">Janvier</option><option value="02">Février</option>
+        <option value="03">Mars</option><option value="04">Avril</option>
+        <option value="05">Mai</option><option value="06">Juin</option>
+        <option value="07">Juillet</option><option value="08">Août</option>
+        <option value="09">Septembre</option><option value="10">Octobre</option>
+        <option value="11">Novembre</option><option value="12">Décembre</option>
+      </select>
+      <input type="text" id="fin-f-search" oninput="finRenderFactures()" placeholder="Rechercher…" style="font-size:11px;padding:4px 8px;border:1.5px solid var(--ink);background:var(--bg);width:160px">
+    </div>
+    <div class="fin-table-wrap">
+      <table class="fin-table">
+        <thead><tr>
+          <th>N° Facture</th><th>Date</th><th>Échéance</th><th>Client</th>
+          <th style="text-align:right">HT</th><th style="text-align:right">TVA</th>
+          <th style="text-align:right">TTC</th><th style="text-align:right">Payé</th>
+          <th style="text-align:right">Restant</th><th>Statut</th>
+        </tr></thead>
+        <tbody id="fin-factures-body"></tbody>
+      </table>
+    </div>
+    <div id="fin-factures-total" style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);padding:4px 0"></div>
+  </div>
+
+  <!-- ── TRÉSORERIE ── -->
+  <div class="fin-view" id="fin-view-tresorerie">
+    <div class="fin-filters">
+      <span class="fin-filter-label">Mois :</span>
+      <select id="fin-t-mois" onchange="finRenderTresorerie()" style="font-size:11px;padding:4px 8px;border:1.5px solid var(--ink);background:var(--bg)">
+        <option value="">Tous</option>
+        <option value="1">Janvier</option><option value="2">Février</option>
+        <option value="3">Mars</option><option value="4">Avril</option>
+        <option value="5">Mai</option><option value="6">Juin</option>
+        <option value="7">Juillet</option><option value="8">Août</option>
+        <option value="9">Septembre</option><option value="10">Octobre</option>
+        <option value="11">Novembre</option><option value="12">Décembre</option>
+      </select>
+      <select id="fin-t-type" onchange="finRenderTresorerie()" style="font-size:11px;padding:4px 8px;border:1.5px solid var(--ink);background:var(--bg)">
+        <option value="">Tous types</option>
+        <option value="credit">Encaissements</option>
+        <option value="debit">Décaissements</option>
+      </select>
+      <button class="btn btn-sm btn-primary" onclick="finAddDecaissement()" style="font-size:10px">+ Décaissement manuel</button>
+    </div>
+    <div class="fin-kpis" id="fin-kpis-tres" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:16px"></div>
+    <div class="fin-table-wrap">
+      <table class="fin-table">
+        <thead><tr>
+          <th>Date</th><th>Libellé</th><th>Tiers</th><th>Compte</th>
+          <th>Catégorie</th><th style="text-align:right">Montant</th><th>État</th><th></th>
+        </tr></thead>
+        <tbody id="fin-tres-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── COMPTE DE RÉSULTAT ── -->
+  <div class="fin-view" id="fin-view-cr">
+    <div class="fin-filters">
+      <span class="fin-filter-label">Exercice :</span>
+      <select id="fin-cr-year" onchange="finRenderCR()" style="font-size:11px;padding:4px 8px;border:1.5px solid var(--ink);background:var(--bg)">
+        <option value="2025">2025</option>
+        <option value="2026" selected>2026</option>
+      </select>
+    </div>
+    <div id="fin-cr-content"></div>
+  </div>
+
+  <!-- ── IMPORT PENNYLANE ── -->
+  <div class="fin-view" id="fin-view-import">
+    <div class="fin-import-cards">
+      <!-- Factures Excel -->
+      <div class="fin-import-card">
+        <h4>🧾 Factures</h4>
+        <p>Export Excel Pennylane<br><code style="font-size:9px">PENNYLANE_*_Factures.xlsx</code></p>
+        <div class="fin-import-status" id="fin-status-factures" style="color:var(--muted)">Aucun fichier importé</div>
+        <input type="file" accept=".xlsx,.xls,.csv" onchange="finImportFactures(this)">
+        <div style="margin-top:10px;pointer-events:none">
+          <span class="btn btn-sm btn-primary" style="font-size:10px;pointer-events:none">📂 Choisir le fichier</span>
+        </div>
+      </div>
+      <!-- Transactions bancaires -->
+      <div class="fin-import-card">
+        <h4>💰 Transactions bancaires</h4>
+        <p>Export Excel Pennylane<br><code style="font-size:9px">PENNYLANE_*_Transactions_bancaires.xlsx</code></p>
+        <div class="fin-import-status" id="fin-status-transactions" style="color:var(--muted)">Aucun fichier importé</div>
+        <input type="file" accept=".xlsx,.xls,.csv" onchange="finImportTransactions(this)">
+        <div style="margin-top:10px;pointer-events:none">
+          <span class="btn btn-sm btn-primary" style="font-size:10px;pointer-events:none">📂 Choisir le fichier</span>
+        </div>
+      </div>
+      <!-- FEC -->
+      <div class="fin-import-card">
+        <h4>📋 FEC (Grand Livre)</h4>
+        <p>Fichier d'Écriture Comptable<br><code style="font-size:9px">*FEC*.txt</code></p>
+        <div class="fin-import-status" id="fin-status-fec" style="color:var(--muted)">Aucun fichier importé</div>
+        <input type="file" accept=".txt,.csv" onchange="finImportFEC(this)">
+        <div style="margin-top:10px;pointer-events:none">
+          <span class="btn btn-sm btn-primary" style="font-size:10px;pointer-events:none">📂 Choisir le fichier</span>
+        </div>
+      </div>
+    </div>
+    <!-- Instructions -->
+    <div style="background:var(--bg);border:1.5px solid var(--border);padding:16px;font-size:11px;line-height:1.7">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;margin-bottom:8px">Comment exporter depuis Pennylane ?</div>
+      <div><strong>Factures :</strong> Pennylane → Ventes → Factures → Exporter → Excel</div>
+      <div><strong>Transactions :</strong> Pennylane → Trésorerie → Transactions → Exporter → Excel</div>
+      <div><strong>FEC :</strong> Pennylane → Comptabilité → Exporter le FEC → Format TXT</div>
+      <div style="margin-top:8px;color:var(--muted)">Les données sont stockées localement et synchronisées via Supabase. Aucune donnée n'est envoyée à un tiers.</div>
+    </div>
+    <!-- Bouton reset -->
+    <div style="margin-top:16px;text-align:right">
+      <button class="btn btn-outline btn-sm" style="color:#e53935;border-color:#e53935;font-size:10px" onclick="finResetData()">🗑 Effacer toutes les données Finance</button>
+    </div>
+  </div>
+
+  <!-- Modal décaissement manuel -->
+  <div id="fin-modal-decaiss" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+    <div style="background:var(--card);border:2px solid var(--ink);box-shadow:var(--shadow-lg);padding:24px;width:420px;max-width:95vw">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:16px;margin-bottom:16px">+ Décaissement manuel</div>
+      <div style="display:grid;gap:10px">
+        <div><label style="font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace">DATE</label><br>
+          <input type="date" id="fin-d-date" style="width:100%;padding:6px;border:1.5px solid var(--ink);background:var(--bg);font-size:12px"></div>
+        <div><label style="font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace">LIBELLÉ</label><br>
+          <input type="text" id="fin-d-libelle" placeholder="Ex: Loyer bureau, Salaire…" style="width:100%;padding:6px;border:1.5px solid var(--ink);background:var(--bg);font-size:12px"></div>
+        <div><label style="font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace">TIERS</label><br>
+          <input type="text" id="fin-d-tiers" placeholder="Fournisseur, bénéficiaire…" style="width:100%;padding:6px;border:1.5px solid var(--ink);background:var(--bg);font-size:12px"></div>
+        <div><label style="font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace">CATÉGORIE</label><br>
+          <select id="fin-d-cat" style="width:100%;padding:6px;border:1.5px solid var(--ink);background:var(--bg);font-size:12px">
+            <option value="">Non catégorisé</option>
+            <option value="Salaires">Salaires & charges</option>
+            <option value="Loyer">Loyer & bureau</option>
+            <option value="Comptabilité">Comptabilité / Juridique</option>
+            <option value="Informatique">Informatique</option>
+            <option value="Déplacements">Déplacements</option>
+            <option value="Communication">Communication / Marketing</option>
+            <option value="Sous-traitance">Sous-traitance</option>
+            <option value="Banque">Frais bancaires</option>
+            <option value="Impôts">Impôts & taxes</option>
+            <option value="Autres">Autres charges</option>
+          </select></div>
+        <div><label style="font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace">MONTANT (€) — saisir en négatif ex: -500</label><br>
+          <input type="number" id="fin-d-montant" placeholder="-500.00" step="0.01" style="width:100%;padding:6px;border:1.5px solid var(--ink);background:var(--bg);font-size:12px"></div>
+        <div><label style="font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace">COMMENTAIRE</label><br>
+          <input type="text" id="fin-d-comment" placeholder="Optionnel" style="width:100%;padding:6px;border:1.5px solid var(--ink);background:var(--bg);font-size:12px"></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('fin-modal-decaiss').style.display='none'">Annuler</button>
+        <button class="btn btn-primary btn-sm" onclick="finSaveDecaissement()">Enregistrer</button>
       </div>
     </div>
   </div>
 
-  <!-- ── KPIs Trésorerie ── -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;">
-    <div class="kpi"><div class="kpi-accent" style="background:var(--green)"></div><div class="kpi-label">Encaissements (factures)</div><div class="kpi-value" id="tres-kpi-enc" style="color:var(--green);font-size:15px">—</div></div>
-    <div class="kpi"><div class="kpi-accent" style="background:var(--red)"></div><div class="kpi-label">Décaissements</div><div class="kpi-value" id="tres-kpi-dec" style="color:var(--red);font-size:15px">—</div></div>
-    <div class="kpi"><div class="kpi-accent" style="background:var(--blue)"></div><div class="kpi-label">Solde net</div><div class="kpi-value" id="tres-kpi-net" style="color:var(--blue);font-size:15px">—</div></div>
-    <div class="kpi"><div class="kpi-accent" style="background:var(--orange)"></div><div class="kpi-label">Factures en attente</div><div class="kpi-value" id="tres-kpi-att" style="color:var(--orange);font-size:15px">—</div></div>
-    <div class="kpi"><div class="kpi-accent" style="background:var(--purple)"></div><div class="kpi-label">Trésorerie totale</div><div class="kpi-value" id="tres-kpi-total" style="color:var(--purple);font-size:15px">—</div></div>
-  </div>
-
-  <!-- ── Layout principal ── -->
-  <div class="tres-layout">
-    <!-- Colonne gauche : comptes -->
-    <div class="comptes-panel">
-      <!-- Qonto -->
-      <div class="banque-group">
-        <div class="banque-header">🏦 Qonto <span class="total-banque" id="total-qonto">—</span></div>
-        <div class="compte-item" id="cpanel-qonto-1" onclick="selectCompte('qonto-1')">
-          <div class="compte-name">Compte principal <span class="compte-devise-tag tag-eur">EUR</span></div>
-          <div class="compte-solde" id="solde-qonto-1" style="color:var(--green)">0,00 €</div>
-          <div class="compte-type">Compte courant</div>
-        </div>
-        <div class="compte-item" id="cpanel-qonto-2" onclick="selectCompte('qonto-2')">
-          <div class="compte-name">Compte secondaire <span class="compte-devise-tag tag-eur">EUR</span></div>
-          <div class="compte-solde" id="solde-qonto-2" style="color:var(--green)">0,00 €</div>
-          <div class="compte-type">Compte courant</div>
-        </div>
-        <div class="compte-item" id="cpanel-qonto-cc1" onclick="selectCompte('qonto-cc1')">
-          <div class="compte-name">Carte de crédit 1 <span class="compte-devise-tag tag-carte">CARTE</span></div>
-          <div class="compte-solde" id="solde-qonto-cc1" style="color:var(--orange)">0,00 €</div>
-          <div class="compte-type">Carte de crédit</div>
-        </div>
-        <div class="compte-item" id="cpanel-qonto-cc2" onclick="selectCompte('qonto-cc2')">
-          <div class="compte-name">Carte de crédit 2 <span class="compte-devise-tag tag-carte">CARTE</span></div>
-          <div class="compte-solde" id="solde-qonto-cc2" style="color:var(--orange)">0,00 €</div>
-          <div class="compte-type">Carte de crédit</div>
-        </div>
-      </div>
-      <!-- IBANfirst -->
-      <div class="banque-group">
-        <div class="banque-header">🌍 IBANfirst <span class="total-banque" id="total-ibanfirst">—</span></div>
-        <div class="compte-item" id="cpanel-ibf-eur-assoc" onclick="selectCompte('ibf-eur-assoc')">
-          <div class="compte-name">Compte associé <span class="compte-devise-tag tag-eur">EUR</span></div>
-          <div class="compte-solde" id="solde-ibf-eur-assoc" style="color:var(--green)">0,00 €</div>
-          <div class="compte-type">Compte associé</div>
-        </div>
-        <div class="compte-item" id="cpanel-ibf-ron-assoc" onclick="selectCompte('ibf-ron-assoc')">
-          <div class="compte-name">Compte associé <span class="compte-devise-tag tag-ron">RON</span></div>
-          <div class="compte-solde" id="solde-ibf-ron-assoc" style="color:var(--purple)">0,00 RON</div>
-          <div class="compte-type">Compte associé — Roumanie</div>
-        </div>
-        <div class="compte-item" id="cpanel-ibf-eur-pret" onclick="selectCompte('ibf-eur-pret')">
-          <div class="compte-name">Convention prêt <span class="compte-devise-tag tag-eur">EUR</span></div>
-          <div class="compte-solde" id="solde-ibf-eur-pret" style="color:var(--teal)">0,00 €</div>
-          <div class="compte-type">Prêt Eastrategies</div>
-        </div>
-        <div class="compte-item" id="cpanel-ibf-ron-pret" onclick="selectCompte('ibf-ron-pret')">
-          <div class="compte-name">Convention prêt <span class="compte-devise-tag tag-ron">RON</span></div>
-          <div class="compte-solde" id="solde-ibf-ron-pret" style="color:var(--purple)">0,00 RON</div>
-          <div class="compte-type">Prêt Eastrategies — RON</div>
-        </div>
-      </div>
-      <!-- Total global -->
-      <div style="background:var(--ink);color:var(--bg);padding:14px;box-shadow:var(--shadow);">
-        <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#aaa;margin-bottom:6px">Trésorerie totale (€)</div>
-        <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--accent)" id="tres-total-global">—</div>
-        <div style="font-size:9px;color:#777;margin-top:4px" id="tres-total-sub">RON converti au taux saisi</div>
-      </div>
-      <!-- Soldes initiaux -->
-  <div class="si-panel" style="margin-top:0;margin-bottom:0">
-    <div class="si-header" onclick="toggleSI()">
-      <span class="si-header-title">💰 Soldes initiaux</span>
-      <span class="si-header-hint" id="si-toggle-hint">▼ déplier</span>
-    </div>
-    <div class="si-body collapsed" id="si-body">
-      <div style="padding:8px 14px;background:#f5f2eb;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);">🏦 Qonto</div>
-      <div class="si-row"><div class="si-compte-name">Compte principal <span class="si-tag tag-eur">EUR</span></div><input class="si-amount-input" id="si-qonto-1" type="number" step="0.01" placeholder="0.00" oninput="saveSoldesInitiaux();renderTresorerie()"><div class="si-devise">EUR</div><div class="si-computed" id="si-comp-qonto-1"></div></div>
-      <div class="si-row"><div class="si-compte-name">Compte secondaire <span class="si-tag tag-eur">EUR</span></div><input class="si-amount-input" id="si-qonto-2" type="number" step="0.01" placeholder="0.00" oninput="saveSoldesInitiaux();renderTresorerie()"><div class="si-devise">EUR</div><div class="si-computed" id="si-comp-qonto-2"></div></div>
-      <div class="si-row"><div class="si-compte-name">Carte de crédit 1 <span class="si-tag tag-carte">CARTE</span></div><input class="si-amount-input" id="si-qonto-cc1" type="number" step="0.01" placeholder="0.00" oninput="saveSoldesInitiaux();renderTresorerie()"><div class="si-devise">EUR</div><div class="si-computed" id="si-comp-qonto-cc1"></div></div>
-      <div class="si-row"><div class="si-compte-name">Carte de crédit 2 <span class="si-tag tag-carte">CARTE</span></div><input class="si-amount-input" id="si-qonto-cc2" type="number" step="0.01" placeholder="0.00" oninput="saveSoldesInitiaux();renderTresorerie()"><div class="si-devise">EUR</div><div class="si-computed" id="si-comp-qonto-cc2"></div></div>
-      <div style="padding:8px 14px;background:#f5f2eb;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);border-top:2px solid var(--border);">🌍 IBANfirst</div>
-      <div class="si-row"><div class="si-compte-name">Compte associé <span class="si-tag tag-eur">EUR</span></div><input class="si-amount-input" id="si-ibf-eur-assoc" type="number" step="0.01" placeholder="0.00" oninput="saveSoldesInitiaux();renderTresorerie()"><div class="si-devise">EUR</div><div class="si-computed" id="si-comp-ibf-eur-assoc"></div></div>
-      <div class="si-row"><div class="si-compte-name">Compte associé <span class="si-tag tag-ron">RON</span></div><input class="si-amount-input" id="si-ibf-ron-assoc" type="number" step="0.01" placeholder="0.00" oninput="saveSoldesInitiaux();renderTresorerie()"><div class="si-devise">RON</div><div class="si-computed" id="si-comp-ibf-ron-assoc"></div></div>
-      <div class="si-row"><div class="si-compte-name">Convention prêt <span class="si-tag tag-eur">EUR</span></div><input class="si-amount-input" id="si-ibf-eur-pret" type="number" step="0.01" placeholder="0.00" oninput="saveSoldesInitiaux();renderTresorerie()"><div class="si-devise">EUR</div><div class="si-computed" id="si-comp-ibf-eur-pret"></div></div>
-      <div class="si-row"><div class="si-compte-name">Convention prêt <span class="si-tag tag-ron">RON</span></div><input class="si-amount-input" id="si-ibf-ron-pret" type="number" step="0.01" placeholder="0.00" oninput="saveSoldesInitiaux();renderTresorerie()"><div class="si-devise">RON</div><div class="si-computed" id="si-comp-ibf-ron-pret"></div></div>
-    </div>
-  </div>
-    </div><!-- fin comptes-panel -->
-
-    <!-- Colonne droite : main panel -->
-    <div class="tres-main">
-      <!-- Graphiques -->
-      <div class="tres-chart-row">
-        <div class="chart-box">
-          <div class="chart-box-title"><span class="dot" style="background:var(--green)"></span>Flux mensuel — <span id="chart-compte-name" style="color:var(--muted);font-size:10px">Tous comptes</span></div>
-          <div style="position:relative;height:130px;display:flex;align-items:flex-end;gap:3px;padding-bottom:22px;overflow:hidden;" id="bar-chart"></div>
-          <div style="display:flex;gap:14px;margin-top:8px;font-size:9px;"><span style="color:var(--green)">■ Encaissements</span><span style="color:var(--red)">■ Décaissements</span></div>
-        </div>
-        <div class="chart-box">
-          <div class="chart-box-title"><span class="dot" style="background:var(--orange)"></span>Répartition par compte</div>
-          <div class="pie-wrap">
-            <svg id="tres-pie" width="100" height="100" viewBox="0 0 100 100" style="flex-shrink:0"></svg>
-            <div id="tres-pie-legend" class="pie-legend"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tableau unifié : encaissements (factures) + décaissements (manuels) -->
-      <div class="chart-box" style="padding:0;overflow:hidden;">
-        <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <div>
-            <div style="font-family:'Syne',sans-serif;font-size:12px;font-weight:700;">Flux de trésorerie</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px;">⬆ Encaissements = factures payées (automatique) · ⬇ Décaissements = saisie manuelle</div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <select class="filter" id="filter-compte" onchange="renderTresorerie()">
-              <option value="">Tous les comptes</option>
-              <option value="qonto-1">Qonto Principal EUR</option>
-              <option value="qonto-2">Qonto Secondaire EUR</option>
-              <option value="qonto-cc1">Qonto Carte 1</option>
-              <option value="qonto-cc2">Qonto Carte 2</option>
-              <option value="ibf-eur-assoc">IBANfirst Associé EUR</option>
-              <option value="ibf-ron-assoc">IBANfirst Associé RON</option>
-              <option value="ibf-eur-pret">IBANfirst Prêt EUR</option>
-              <option value="ibf-ron-pret">IBANfirst Prêt RON</option>
-            </select>
-            <select class="filter" id="filter-tx-type" onchange="renderTresorerie()">
-              <option value="">Tous types</option>
-              <option value="encaissement">⬆ Encaissements</option>
-              <option value="decaissement">⬇ Décaissements</option>
-            </select>
-            <select class="filter" id="filter-tx-mois" onchange="renderTresorerie()">
-              <option value="">Tous les mois</option>
-              <option value="2026-01">Janvier 2026</option>
-              <option value="2026-02">Février 2026</option>
-              <option value="2026-03">Mars 2026</option>
-              <option value="2026-04">Avril 2026</option>
-              <option value="2026-05">Mai 2026</option>
-              <option value="2026-06">Juin 2026</option>
-              <option value="2026-07">Juillet 2026</option>
-              <option value="2026-08">Août 2026</option>
-              <option value="2026-09">Septembre 2026</option>
-              <option value="2026-10">Octobre 2026</option>
-              <option value="2026-11">Novembre 2026</option>
-              <option value="2026-12">Décembre 2026</option>
-            </select>
-            <button class="btn btn-primary btn-sm" onclick="openTxModal()">+ Décaissement</button>
-          </div>
-        </div>
-        <div class="table-wrap" style="padding:0;">
-          <table style="min-width:700px;">
-            <thead><tr>
-              <th onclick="sortTx('date')">Date <span class="sort-arrow">⇕</span></th>
-              <th class="nosort">Compte</th>
-              <th class="nosort">Type</th>
-              <th onclick="sortTx('categorie')">Catégorie <span class="sort-arrow">⇕</span></th>
-              <th onclick="sortTx('libelle')">Libellé / Facture <span class="sort-arrow">⇕</span></th>
-              <th onclick="sortTx('montant')">Montant <span class="sort-arrow">⇕</span></th>
-              <th class="nosort">Actions</th>
-            </tr></thead>
-            <tbody id="tx-body"></tbody>
-          </table>
-          <div class="empty-state" id="tx-empty" style="display:none"><div class="empty-big">💳</div><div style="margin-top:10px">Aucun flux de trésorerie</div><div style="font-size:11px;color:var(--muted);margin-top:6px">Les factures payées apparaissent automatiquement · Ajoutez des décaissements manuellement</div></div>
-        </div>
-      </div>
-    </div><!-- fin tres-main -->
-  </div><!-- fin tres-layout -->
 </div>
-
+<!-- ══ SECTION VIBE IMPORT ══ -->
 <!-- ══ SECTION VIBE IMPORT ══ -->
 <div class="section" id="section-vibe">
   <style>
@@ -1667,156 +1742,6 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
     </div>
     <div class="dp-body" id="dp-body"></div>
   </div>
-</div>
-
-<!-- ═══════════════════════════════════════════ RÉSULTAT ANNUEL ═══ -->
-<div class="section" id="section-resultat">
-
-  <!-- Sélecteur année -->
-  <div class="ra-year-sel">
-    <span style="font-family:'Syne',sans-serif;font-size:13px;font-weight:800;">Exercice</span>
-    <select id="ra-year" onchange="renderResultat()">
-      <option value="2025">2025</option>
-      <option value="2026" selected>2026</option>
-      <option value="2027">2027</option>
-    </select>
-    <span style="font-size:10px;color:var(--muted);">— Ventes calculées depuis les factures · Charges saisies manuellement</span>
-  </div>
-
-  <!-- Convention de prêt Eastrategies -->
-  <div class="pret-section">
-    <div class="pret-header">
-      <span>🏦 Convention de prêt Eastrategies</span>
-      <span id="pret-restant-header" style="font-size:11px;font-weight:400;color:#ddd"></span>
-    </div>
-    <div class="pret-grid">
-      <div class="pret-field"><label>Montant total du prêt (€)</label><input type="number" id="pret-montant" step="100" placeholder="ex: 20000" oninput="saveResultat();updatePret()"></div>
-      <div class="pret-field"><label>Date de début</label><input type="date" id="pret-debut" oninput="saveResultat();updatePret()"></div>
-      <div class="pret-field"><label>Durée (mois)</label><input type="number" id="pret-duree" min="1" max="120" placeholder="ex: 24" oninput="saveResultat();updatePret()"></div>
-      <div class="pret-field"><label>Taux annuel (%)</label><input type="number" id="pret-taux" step="0.1" placeholder="ex: 3.5" oninput="saveResultat();updatePret()"></div>
-      <div class="pret-field"><label>Déjà remboursé (€)</label><input type="number" id="pret-rembourse" step="0.01" placeholder="0" oninput="saveResultat();updatePret()"></div>
-    </div>
-    <div class="pret-computed">
-      <div class="pret-kpi"><div class="pret-kpi-val" id="pret-mensualite">—</div><div class="pret-kpi-lbl">Mensualité</div></div>
-      <div class="pret-kpi"><div class="pret-kpi-val" id="pret-restant">—</div><div class="pret-kpi-lbl">Capital restant dû</div></div>
-      <div class="pret-kpi"><div class="pret-kpi-val" id="pret-total-int">—</div><div class="pret-kpi-lbl">Total intérêts</div></div>
-      <div class="pret-kpi"><div class="pret-kpi-val" id="pret-echeances-restantes">—</div><div class="pret-kpi-lbl">Échéances restantes</div></div>
-    </div>
-  </div>
-
-  <!-- Grille : Ventes auto + Charges manuelles -->
-  <div class="ra-grid">
-
-    <!-- Ventes par mois (auto) -->
-    <div class="ra-card">
-      <div class="ra-card-header">
-        <span>📦 Ventes encaissées (HT)</span>
-        <span class="ra-total" id="ra-ventes-total">—</span>
-      </div>
-      <table class="ra-month-table">
-        <thead><tr><th>Mois</th><th>Facturé HT</th><th>Encaissé TTC</th><th>TVA collectée</th></tr></thead>
-        <tbody id="ra-ventes-body"></tbody>
-      </table>
-    </div>
-
-    <!-- Charges mensuelles (manual) -->
-    <div class="ra-card">
-      <div class="ra-card-header">
-        <span>📋 Charges mensuelles</span>
-        <span class="ra-total" id="ra-charges-total">—</span>
-      </div>
-      <div style="overflow-x:auto;">
-        <table class="ra-month-table" style="min-width:900px;">
-          <thead><tr><th style="text-align:left;width:160px;">Catégorie</th><th>Jan</th><th>Fév</th><th>Mar</th><th>Avr</th><th>Mai</th><th>Jun</th><th>Jul</th><th>Aoû</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Déc</th><th>TOTAL</th></tr></thead>
-          <tbody><tr>
-        <td class="ra-month-lbl">Salaires & charges sociales</td>
-        <td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-salaires-11" oninput="saveResultat();renderResultat()"></td>
-        <td class="ra-auto" id="ch-tot-salaires">—</td>
-      </tr><tr>
-        <td class="ra-month-lbl">Loyer & charges bureau</td>
-        <td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-loyer-11" oninput="saveResultat();renderResultat()"></td>
-        <td class="ra-auto" id="ch-tot-loyer">—</td>
-      </tr><tr>
-        <td class="ra-month-lbl">Comptabilité / Juridique</td>
-        <td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-compta-11" oninput="saveResultat();renderResultat()"></td>
-        <td class="ra-auto" id="ch-tot-compta">—</td>
-      </tr><tr>
-        <td class="ra-month-lbl">Informatique & logiciels</td>
-        <td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-informatique-11" oninput="saveResultat();renderResultat()"></td>
-        <td class="ra-auto" id="ch-tot-informatique">—</td>
-      </tr><tr>
-        <td class="ra-month-lbl">Déplacements & missions</td>
-        <td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-deplacement-11" oninput="saveResultat();renderResultat()"></td>
-        <td class="ra-auto" id="ch-tot-deplacement">—</td>
-      </tr><tr>
-        <td class="ra-month-lbl">Communication & marketing</td>
-        <td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-communication-11" oninput="saveResultat();renderResultat()"></td>
-        <td class="ra-auto" id="ch-tot-communication">—</td>
-      </tr><tr>
-        <td class="ra-month-lbl">Sous-traitance</td>
-        <td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-sous_traitance-11" oninput="saveResultat();renderResultat()"></td>
-        <td class="ra-auto" id="ch-tot-sous_traitance">—</td>
-      </tr><tr>
-        <td class="ra-month-lbl">Frais bancaires</td>
-        <td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-banque-11" oninput="saveResultat();renderResultat()"></td>
-        <td class="ra-auto" id="ch-tot-banque">—</td>
-      </tr><tr>
-        <td class="ra-month-lbl">Autres charges</td>
-        <td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="ch-autres-11" oninput="saveResultat();renderResultat()"></td>
-        <td class="ra-auto" id="ch-tot-autres">—</td>
-      </tr>
-            <tr class="ra-row-total">
-              <td class="ra-month-lbl">TOTAL CHARGES</td>
-              <td class="ra-auto" id="ch-col-0">—</td><td class="ra-auto" id="ch-col-1">—</td><td class="ra-auto" id="ch-col-2">—</td><td class="ra-auto" id="ch-col-3">—</td><td class="ra-auto" id="ch-col-4">—</td><td class="ra-auto" id="ch-col-5">—</td><td class="ra-auto" id="ch-col-6">—</td><td class="ra-auto" id="ch-col-7">—</td><td class="ra-auto" id="ch-col-8">—</td><td class="ra-auto" id="ch-col-9">—</td><td class="ra-auto" id="ch-col-10">—</td><td class="ra-auto" id="ch-col-11">—</td>
-              <td class="ra-auto" id="ch-grand-total">—</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- TVA -->
-  <div class="ra-card" style="margin-bottom:18px;">
-    <div class="ra-card-header">
-      <span>🧾 TVA à payer (mensuelle)</span>
-      <span class="ra-total" id="ra-tva-total">—</span>
-    </div>
-    <div style="overflow-x:auto;">
-      <table class="ra-month-table" style="min-width:700px;">
-        <thead><tr><th style="text-align:left;width:160px;">Ligne</th><th>Jan</th><th>Fév</th><th>Mar</th><th>Avr</th><th>Mai</th><th>Jun</th><th>Jul</th><th>Aoû</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Déc</th><th>TOTAL</th></tr></thead>
-        <tbody>
-          <tr><td class="ra-month-lbl">TVA collectée</td><td class="ra-auto" id="tva-col-0">—</td><td class="ra-auto" id="tva-col-1">—</td><td class="ra-auto" id="tva-col-2">—</td><td class="ra-auto" id="tva-col-3">—</td><td class="ra-auto" id="tva-col-4">—</td><td class="ra-auto" id="tva-col-5">—</td><td class="ra-auto" id="tva-col-6">—</td><td class="ra-auto" id="tva-col-7">—</td><td class="ra-auto" id="tva-col-8">—</td><td class="ra-auto" id="tva-col-9">—</td><td class="ra-auto" id="tva-col-10">—</td><td class="ra-auto" id="tva-col-11">—</td><td class="ra-auto" id="tva-col-tot">—</td></tr>
-          <tr><td class="ra-month-lbl">TVA déductible</td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-0" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-1" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-2" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-3" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-4" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-5" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-6" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-7" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-8" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-9" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-10" oninput="saveResultat();renderResultat()"></td><td class="ra-input-cell"><input class="ra-input" type="number" step="0.01" placeholder="—" id="tvad-11" oninput="saveResultat();renderResultat()"></td><td class="ra-auto" id="tvad-tot">—</td></tr>
-          <tr class="ra-row-total"><td class="ra-month-lbl">TVA nette à payer</td><td class="ra-auto" id="tva-nette-0">—</td><td class="ra-auto" id="tva-nette-1">—</td><td class="ra-auto" id="tva-nette-2">—</td><td class="ra-auto" id="tva-nette-3">—</td><td class="ra-auto" id="tva-nette-4">—</td><td class="ra-auto" id="tva-nette-5">—</td><td class="ra-auto" id="tva-nette-6">—</td><td class="ra-auto" id="tva-nette-7">—</td><td class="ra-auto" id="tva-nette-8">—</td><td class="ra-auto" id="tva-nette-9">—</td><td class="ra-auto" id="tva-nette-10">—</td><td class="ra-auto" id="tva-nette-11">—</td><td class="ra-auto" id="tva-nette-tot">—</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Synthèse mensuelle -->
-  <div class="ra-synthese">
-    <div class="ra-synth-header">📊 Synthèse mensuelle — Résultat net</div>
-    <div style="overflow-x:auto;">
-      <table class="ra-synth-table" style="min-width:900px;">
-        <thead><tr><th style="text-align:left;width:180px;">Indicateur</th><th>Jan</th><th>Fév</th><th>Mar</th><th>Avr</th><th>Mai</th><th>Jun</th><th>Jul</th><th>Aoû</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Déc</th><th>ANNUEL</th></tr></thead>
-        <tbody id="ra-synth-body"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Devis à facturer -->
-  <div class="ra-card" style="margin-bottom:18px;">
-    <div class="ra-card-header">
-      <span>📝 Devis acceptés — Montant à facturer</span>
-      <span class="ra-total" id="ra-devis-total">—</span>
-    </div>
-    <table class="ra-month-table">
-      <thead><tr><th style="text-align:left;">Entreprise</th><th style="text-align:left;">N° Devis</th><th>Montant</th><th>Réalisation</th><th>Closing</th><th style="text-align:left;">Responsable</th><th style="text-align:left;">Notes</th></tr></thead>
-      <tbody id="ra-devis-body"></tbody>
-    </table>
-  </div>
-
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2235,9 +2160,8 @@ function switchTab(name,btn){
   btn.classList.add('active');
   if(name==='pipeline')    renderPipeline();
   if(name==='facturation') renderFacturation();
-  if(name==='tresorerie')  renderTresorerie();
+  if(name==='finance')     renderFinance();
   if(name==='dashboard')   renderDashboard();
-  if(name==='resultat')    renderResultat();
   if(name==='rappels')  { twRender(); }
   if(name==='weekly')   { /* load panel visible by default */ }
   if(name==='planning') { plRender(); }
@@ -2717,674 +2641,696 @@ function importFecPennylane(input) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  TRÉSORERIE
+//  MODULE FINANCE — Pennylane
 // ═══════════════════════════════════════════════════════
-function sortTx(k){sortTxDir=sortTxKey===k?sortTxDir*-1:1;sortTxKey=k;renderTresorerie();}
-function selectCompte(id){
-  document.getElementById('filter-compte').value=id;
-  renderTresorerie();
+
+// ── Données Finance ──────────────────────────────────
+let finFactures     = [];   // Factures importées depuis Pennylane Excel
+let finTransactions = [];   // Transactions bancaires importées
+let finFEC          = [];   // Écritures FEC importées
+let finDecaissements = [];  // Décaissements manuels
+
+function finLoad() {
+  try { finFactures      = JSON.parse(localStorage.getItem('fin_factures')      || '[]'); } catch(e) { finFactures = []; }
+  try { finTransactions  = JSON.parse(localStorage.getItem('fin_transactions')  || '[]'); } catch(e) { finTransactions = []; }
+  try { finFEC           = JSON.parse(localStorage.getItem('fin_fec')           || '[]'); } catch(e) { finFEC = []; }
+  try { finDecaissements = JSON.parse(localStorage.getItem('fin_decaissements') || '[]'); } catch(e) { finDecaissements = []; }
 }
-function renderTresorerie(){
-  const tauxRon=getTauxRon();
-  document.getElementById('taux-eur-ron-display').textContent=(1/tauxRon).toFixed(2);
 
-  // ── Construire la liste unifiée des flux (factures payées + décaissements manuels) ──
-  // Encaissements : tirés des factures avec statut Payée ou Partiellement payée
-  const encaissements = factures
-    .filter(f => f.montant_paye > 0)
-    .map(f => ({
-      id: 'fac_'+f.id,
-      date: f.date_echeance || f.date_emission || '',
-      compte: f.compte_encaissement || 'qonto-1',
-      type: 'encaissement',
-      categorie: 'Honoraires',
-      libelle: f.num + (f.client ? ' — ' + f.client : ''),
-      montant: f.montant_paye,
-      devise: 'EUR',
-      source: 'facture',
-      facture_id: f.id,
-      statut_fac: f.statut
-    }));
+function finSave() {
+  localStorage.setItem('fin_factures',      JSON.stringify(finFactures));
+  localStorage.setItem('fin_transactions',  JSON.stringify(finTransactions));
+  localStorage.setItem('fin_fec',           JSON.stringify(finFEC));
+  localStorage.setItem('fin_decaissements', JSON.stringify(finDecaissements));
+  sbPush('finance', { fin_factures: finFactures, fin_transactions: finTransactions, fin_fec: finFEC, fin_decaissements: finDecaissements });
+}
 
-  // Décaissements : uniquement les transactions manuelles de type décaissement
-  const decaissements = transactions.filter(t => t.type === 'decaissement');
+// ── Navigation sous-onglets ───────────────────────────
+function finSwitchTab(id, btn) {
+  document.querySelectorAll('.fin-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.fin-view').forEach(v => v.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const v = document.getElementById('fin-view-' + id);
+  if (v) v.classList.add('active');
+  if (id === 'overview')    finRenderOverview();
+  if (id === 'factures')    finRenderFactures();
+  if (id === 'tresorerie')  finRenderTresorerie();
+  if (id === 'cr')          finRenderCR();
+  if (id === 'import')      finRenderImportStatus();
+}
 
-  // Flux unifiés
-  const allFlux = [...encaissements, ...decaissements];
+// ── Helpers ───────────────────────────────────────────
+const FMT_EUR = v => (v||0).toLocaleString('fr-FR', {style:'currency', currency:'EUR', minimumFractionDigits:2});
+const FMT_DATE = s => {
+  if (!s) return '';
+  // dd/mm/yyyy → yyyy-mm-dd
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return s.substring(0, 10);
+};
+const FMT_DISP = s => {
+  if (!s) return '';
+  const d = FMT_DATE(s);
+  if (d.length === 10) return d.split('-').reverse().join('/');
+  return s;
+};
+const MOIS_LABELS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
 
-  // ── KPIs ──
-  const totalEnc = encaissements.reduce((s,t)=>s+(t.montant||0),0);
-  const totalDec = decaissements.reduce((s,t)=>{
-    const v = t.devise==='RON' ? (t.montant||0)*tauxRon : (t.montant||0);
-    return s+v;
-  },0);
-  const totalAtt = factures.filter(f=>['Envoyée','En retard','Partiellement payée'].includes(f.statut)).reduce((s,f)=>s+((f.montant_ttc||0)-(f.montant_paye||0)),0);
-  const set = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
-  set('tres-kpi-enc', fmtEur(totalEnc));
-  set('tres-kpi-dec', fmtEur(totalDec));
-  set('tres-kpi-net', fmtEur(totalEnc - totalDec));
-  const netEl = document.getElementById('tres-kpi-net');
-  if(netEl) netEl.style.color = (totalEnc-totalDec)>=0 ? 'var(--green)' : 'var(--red)';
-  set('tres-kpi-att', fmtEur(totalAtt));
+function finGetStatutBadge(statut) {
+  const map = { 'Encaissée':'encaissee', 'En retard':'en-retard', 'À venir':'a-venir', 'Annulée':'annulee' };
+  const cls = map[statut] || 'a-venir';
+  return `<span class="fin-badge ${cls}">${statut || '—'}</span>`;
+}
 
-  // ── Calcul soldes par compte (solde initial + décaissements manuels) ──
-  const soldes={};
-  const refDate = siRefDate || '2026-01-01';
-  Object.keys(COMPTES).forEach(k => soldes[k] = soldesInitiaux[k] || 0);
-  // Encaissements factures vers le compte associé
-  encaissements.forEach(t=>{
-    if(!soldes.hasOwnProperty(t.compte))return;
-    soldes[t.compte]+=(t.montant||0);
-  });
-  // Décaissements manuels
-  decaissements.forEach(t=>{
-    if(!soldes.hasOwnProperty(t.compte))return;
-    if(t.date && t.date < refDate) return;
-    soldes[t.compte]-=(t.montant||0);
-  });
+// ── VUE D'ENSEMBLE ────────────────────────────────────
+function finRenderOverview() {
+  const el = document.getElementById('fin-kpis-overview');
+  if (!el) return;
 
-  // Affichage soldes
-  Object.entries(soldes).forEach(([id,s])=>{
-    const el=document.getElementById('solde-'+id);
-    if(!el)return;
-    const c=COMPTES[id];
-    el.textContent=c.devise==='RON'?fmtRon(Math.round(s)):fmtEur(s);
-    el.style.color=s>=0?'var(--green)':s>-100?'var(--orange)':'var(--red)';
-    const compEl = document.getElementById('si-comp-'+id);
-    if(compEl) {
-      const si = soldesInitiaux[id] || 0;
-      const mvt = s - si;
-      const sign = mvt >= 0 ? '+' : '';
-      const mvtFmt = c.devise==='RON' ? fmtRon(Math.round(mvt)) : fmtEur(mvt);
-      compEl.textContent = si !== 0 ? `mvt: ${sign}${mvtFmt}` : '';
-      compEl.style.color = mvt >= 0 ? 'var(--green)' : 'var(--red)';
+  // KPIs factures
+  const facs = finFactures.filter(f => f.statut !== 'Annulée');
+  const caHT = facs.reduce((s,f) => s + (f.ht||0), 0);
+  const encaisse = facs.filter(f => f.statut === 'Encaissée').reduce((s,f) => s + (f.ht||0), 0);
+  const enAttente = facs.filter(f => f.statut !== 'Encaissée').reduce((s,f) => s + (f.restant||0), 0);
+  const enRetard = facs.filter(f => f.statut === 'En retard').length;
+
+  // KPIs trésorerie
+  const allTx = [...finTransactions, ...finDecaissements];
+  const encaissTx = allTx.filter(t => (t.montant||0) > 0).reduce((s,t) => s + t.montant, 0);
+  const decaissTx = allTx.filter(t => (t.montant||0) < 0).reduce((s,t) => s + t.montant, 0);
+  const soldeTx = encaissTx + decaissTx;
+
+  const tauxRecouv = caHT > 0 ? Math.round(encaisse / caHT * 100) : 0;
+
+  el.innerHTML = `
+    <div class="fin-kpi"><div class="fin-kpi-accent" style="background:#1a1aff"></div>
+      <div class="fin-kpi-label">CA Total HT</div>
+      <div class="fin-kpi-value">${FMT_EUR(caHT)}</div>
+      <div class="fin-kpi-sub">${facs.length} factures</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-accent" style="background:#2e7d32"></div>
+      <div class="fin-kpi-label">Encaissé HT</div>
+      <div class="fin-kpi-value" style="color:#2e7d32">${FMT_EUR(encaisse)}</div>
+      <div class="fin-kpi-sub">Taux : ${tauxRecouv}%</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-accent" style="background:#e65100"></div>
+      <div class="fin-kpi-label">En attente TTC</div>
+      <div class="fin-kpi-value" style="color:#e65100">${FMT_EUR(enAttente)}</div>
+      <div class="fin-kpi-sub">${enRetard} en retard</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-accent" style="background:#1565c0"></div>
+      <div class="fin-kpi-label">Solde bancaire</div>
+      <div class="fin-kpi-value" style="color:${soldeTx>=0?'#2e7d32':'#c62828'}">${FMT_EUR(soldeTx)}</div>
+      <div class="fin-kpi-sub">${allTx.length} transactions</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-accent" style="background:#7b1fa2"></div>
+      <div class="fin-kpi-label">Décaissements</div>
+      <div class="fin-kpi-value" style="color:#c62828">${FMT_EUR(decaissTx)}</div>
+      <div class="fin-kpi-sub">Encaissé : ${FMT_EUR(encaissTx)}</div></div>
+  `;
+
+  // Graphique CA mensuel
+  finRenderBarChart('fin-chart-ca', finGetCaMensuel(), '#1a1aff');
+  // Graphique flux trésorerie
+  finRenderBarChart('fin-chart-flux', finGetFluxMensuel(), null, true);
+  // Top clients
+  finRenderTopClients();
+}
+
+function finGetCaMensuel() {
+  const data = Array(12).fill(0);
+  finFactures.filter(f => f.statut !== 'Annulée').forEach(f => {
+    const d = FMT_DATE(f.date);
+    if (d && d.length >= 7) {
+      const m = parseInt(d.substring(5,7)) - 1;
+      if (m >= 0 && m < 12) data[m] += (f.ht||0);
     }
   });
+  return data.map((v,i) => ({ label: MOIS_LABELS[i], value: v }));
+}
 
-  // Totaux banques
-  const qontoTotal=(['qonto-1','qonto-2','qonto-cc1','qonto-cc2'].reduce((s,k)=>s+soldes[k],0));
-  const ibfTotal=(['ibf-eur-assoc','ibf-ron-assoc','ibf-eur-pret','ibf-ron-pret'].reduce((s,k)=>{
-    return s+(COMPTES[k].devise==='RON'?soldes[k]*tauxRon:soldes[k]);
-  },0));
-  document.getElementById('total-qonto').textContent=fmtEur(qontoTotal);
-  document.getElementById('total-ibanfirst').textContent=fmtEur(Math.round(ibfTotal));
-  const grand=qontoTotal+ibfTotal;
-  document.getElementById('tres-total-global').textContent=fmtEur(Math.round(grand));
-  document.getElementById('tres-total-sub').textContent=`Qonto: ${fmtEur(qontoTotal)} · IBANfirst: ${fmtEur(Math.round(ibfTotal))}`;
-  set('tres-kpi-total', fmtEur(Math.round(grand)));
-
-  // Active compte panel
-  const curCpte=document.getElementById('filter-compte').value;
-  document.querySelectorAll('.compte-item').forEach(el=>el.classList.remove('active'));
-  if(curCpte){const panel=document.getElementById('cpanel-'+curCpte);if(panel)panel.classList.add('active');}
-
-  // Bar chart mensuel (encaissements factures + décaissements)
-  const months={};
-  allFlux.forEach(t=>{
-    const m=t.date?t.date.substring(0,7):'';
-    if(!m)return;
-    if(curCpte && t.compte !== curCpte) return;
-    if(!months[m])months[m]={enc:0,dec:0};
-    const val=(t.devise==='RON'?t.montant*tauxRon:t.montant)||0;
-    if(t.type==='encaissement')months[m].enc+=val;
-    else months[m].dec+=val;
+function finGetFluxMensuel() {
+  const data = Array(12).fill(0);
+  [...finTransactions, ...finDecaissements].forEach(t => {
+    const d = (t.date||'').substring(0,10);
+    if (d.length >= 7) {
+      const m = parseInt(d.substring(5,7)) - 1;
+      if (m >= 0 && m < 12) data[m] += (t.montant||0);
+    }
   });
-  const mEntries=Object.entries(months).sort((a,b)=>a[0]>b[0]?1:-1).slice(-6);
-  const maxBar=Math.max(...mEntries.flatMap(([,v])=>[v.enc,v.dec]),1);
-  const barH=100;
-  document.getElementById('chart-compte-name').textContent=curCpte?(COMPTES[curCpte]?.nom||''):'Tous comptes';
-  document.getElementById('bar-chart').innerHTML=mEntries.map(([mo,v])=>{
-    const encH=Math.round(v.enc/maxBar*barH);
-    const decH=Math.round(v.dec/maxBar*barH);
-    const lbl=mo.split('-')[1]+'/'+mo.split('-')[0].slice(2);
-    return`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;position:relative;">
-      <div style="display:flex;align-items:flex-end;gap:1px;width:100%;justify-content:center;">
-        <div style="background:var(--green);border:1px solid var(--ink);height:${encH}px;width:45%;min-height:2px;"></div>
-        <div style="background:var(--red);border:1px solid var(--ink);height:${decH}px;width:45%;min-height:2px;"></div>
-      </div>
-      <div style="font-size:7px;color:var(--muted);position:absolute;bottom:-18px;">${lbl}</div>
+  return data.map((v,i) => ({ label: MOIS_LABELS[i], value: v }));
+}
+
+function finRenderBarChart(containerId, data, color, bipolar) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const maxVal = Math.max(...data.map(d => Math.abs(d.value)), 1);
+  el.innerHTML = data.map(d => {
+    const pct = Math.abs(d.value) / maxVal * 100;
+    const col = bipolar ? (d.value >= 0 ? '#2e7d32' : '#c62828') : (color || '#1a1aff');
+    const fmt = d.value.toLocaleString('fr-FR', {maximumFractionDigits:0}) + ' €';
+    return `<div class="fin-bar-col">
+      <div class="fin-bar" style="height:${pct}%;background:${col};min-height:${d.value!==0?'4px':'0'}" data-val="${fmt}"></div>
+      <div class="fin-bar-label">${d.label}</div>
     </div>`;
   }).join('');
+}
 
-  // Pie répartition par compte
-  const pieData=Object.entries(soldes).filter(([,s])=>s>0).map(([id,s])=>({
-    id,label:COMPTES[id]?.nom||id,
-    val:COMPTES[id]?.devise==='RON'?s*tauxRon:s
-  })).sort((a,b)=>b.val-a.val);
-  const ptotal=pieData.reduce((s,x)=>s+x.val,0)||1;
-  let pang=0,ppaths='';
-  const pleg=document.getElementById('tres-pie-legend');pleg.innerHTML='';
-  pieData.forEach(({label,val},i)=>{
-    const pp=val/ptotal,pa=pp*2*Math.PI;
-    const px1=50+45*Math.cos(pang),py1=50+45*Math.sin(pang),px2=50+45*Math.cos(pang+pa),py2=50+45*Math.sin(pang+pa);
-    ppaths+=`<path d="M50,50 L${px1},${py1} A45,45 0 ${pa>Math.PI?1:0},1 ${px2},${py2} Z" fill="${PIE_COLORS[i%PIE_COLORS.length]}" opacity=".9"/>`;
-    pang+=pa;
-    pleg.innerHTML+=`<div class="pie-leg-item"><div class="pie-dot" style="background:${PIE_COLORS[i%PIE_COLORS.length]}"></div><span style="font-size:9px">${label}</span></div>`;
+function finRenderTopClients() {
+  const el = document.getElementById('fin-top-clients');
+  if (!el) return;
+  const clients = {};
+  finFactures.filter(f => f.statut !== 'Annulée').forEach(f => {
+    clients[f.tiers] = (clients[f.tiers]||0) + (f.ht||0);
   });
-  document.getElementById('tres-pie').innerHTML=ppaths||'<circle cx="50" cy="50" r="45" fill="#e8e4dc"/>';
+  const sorted = Object.entries(clients).sort((a,b) => b[1]-a[1]).slice(0,8);
+  if (!sorted.length) { el.innerHTML = '<div class="fin-empty"><div class="fin-empty-icon">📊</div>Aucune donnée — importez vos factures Pennylane</div>'; return; }
+  const max = sorted[0][1];
+  el.innerHTML = sorted.map(([name, val]) => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="width:160px;font-size:11px;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</div>
+      <div style="flex:1;background:var(--border);height:12px;position:relative">
+        <div style="height:100%;background:#1a1aff;width:${val/max*100}%"></div>
+      </div>
+      <div style="width:100px;text-align:right;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace">${FMT_EUR(val)}</div>
+    </div>`).join('');
+}
 
-  // ── Tableau unifié ──
-  const fCpte=document.getElementById('filter-compte').value;
-  const fType=document.getElementById('filter-tx-type').value;
-  const fMois=(document.getElementById('filter-tx-mois')||{}).value||'';
-  let txData=allFlux.filter(t=>{
-    if(fCpte && t.compte!==fCpte) return false;
-    if(fType && t.type!==fType) return false;
-    if(fMois && !(t.date||'').startsWith(fMois)) return false;
+// ── FACTURES ─────────────────────────────────────────
+function finRenderFactures() {
+  const body = document.getElementById('fin-factures-body');
+  const totEl = document.getElementById('fin-factures-total');
+  if (!body) return;
+
+  const fStatut = document.getElementById('fin-f-statut')?.value || '';
+  const fClient = document.getElementById('fin-f-client')?.value || '';
+  const fMois   = document.getElementById('fin-f-mois')?.value || '';
+  const fSearch = (document.getElementById('fin-f-search')?.value || '').toLowerCase();
+
+  // Peupler le filtre clients
+  const clientSel = document.getElementById('fin-f-client');
+  if (clientSel && clientSel.options.length <= 1) {
+    const clients = [...new Set(finFactures.map(f => f.tiers).filter(Boolean))].sort();
+    clients.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; clientSel.appendChild(o); });
+  }
+
+  let rows = finFactures.filter(f => {
+    if (fStatut && f.statut !== fStatut) return false;
+    if (fClient && f.tiers !== fClient) return false;
+    if (fMois) { const d = FMT_DATE(f.date); if (!d || d.substring(5,7) !== fMois) return false; }
+    if (fSearch && !JSON.stringify(f).toLowerCase().includes(fSearch)) return false;
     return true;
   });
-  txData=[...txData].sort((a,b)=>{
-    let av=a[sortTxKey]??'',bv=b[sortTxKey]??'';
-    if(typeof av==='number')return(av-bv)*sortTxDir;
-    return String(av).localeCompare(String(bv),'fr')*sortTxDir;
-  });
-  const txBody=document.getElementById('tx-body');
-  const txEmpty=document.getElementById('tx-empty');
-  if(!txData.length){txBody.innerHTML='';txEmpty.style.display='block';return;}
-  txEmpty.style.display='none';
-  txBody.innerHTML=txData.map(t=>{
-    const c=COMPTES[t.compte];
-    const isEnc=t.type==='encaissement';
-    const isFac=t.source==='facture';
-    const montantDisplay=t.devise==='RON'
-      ?`${fmtRon(t.montant)}<br><span style="font-size:9px;color:var(--muted)">${fmtEur(Math.round(t.montant*tauxRon))}</span>`
-      :fmtEur(t.montant);
-    const compteLabel = c ? `<strong>${c.banque}</strong><br><span style="color:var(--muted);font-size:9px">${c.nom}</span>` : `<span style="color:var(--muted)">${t.compte||'—'}</span>`;
-    const actionsBtns = isFac
-      ? `<button class="icon-btn" onclick="switchTabById('facturation')" title="Voir la facture">🧧</button>`
-      : `<button class="icon-btn" onclick="openTxModal('${t.id}')" title="Modifier">✎</button><button class="icon-btn del" onclick="deleteTx('${t.id}')" title="Supprimer">✕</button>`;
-    const rowStyle = isFac ? '' : 'background:#fffbf0';
-    return`<tr style="${rowStyle}">
-      <td style="font-size:10px">${fmtDate(t.date)}</td>
-      <td style="font-size:10px">${compteLabel}</td>
-      <td style="text-align:center"><span class="badge ${isEnc?'badge-accepte':'badge-retard'}">${isEnc?'⬆ Encaiss.':'⬇ Décaiss.'}</span>${isFac?'<br><span style="font-size:8px;color:var(--blue)">🧧 Facture</span>':''}</td>
-      <td style="font-size:10px;color:var(--muted)">${t.categorie||'—'}</td>
-      <td style="font-size:11px">${t.libelle||'—'}</td>
-      <td class="${isEnc?'amount-pos':'amount-neg'}" style="text-align:right;font-weight:700">${isEnc?'+':'-'}${montantDisplay}</td>
-      <td><div class="actions">${actionsBtns}</div></td>
-    </tr>`;
-  }).join('');
-  updateGlobalKPIs();
-}
-function openTxModal(id=null){
-  const t=id?transactions.find(x=>x.id===id):null;
-  editingTx=t?t.id:null;
-  document.getElementById('tx-modal-title').textContent=t?'⬇ Modifier le décaissement':'⬇ Nouveau décaissement';
-  document.getElementById('ftx-date').value=t?t.date:today.toISOString().split('T')[0];
-  document.getElementById('ftx-compte').value=t?t.compte:'qonto-1';
-  // type forcé à décaissement (hidden input)
-  document.getElementById('ftx-categorie').value=t?t.categorie:'Loyer';
-  document.getElementById('ftx-libelle').value=t?t.libelle:'';
-  document.getElementById('ftx-montant').value=t?t.montant:'';
-  document.getElementById('ftx-devise').value=t?t.devise:'EUR';
-  document.getElementById('ftx-facture').value=t?(t.facture_id||t.notes||''):'';
-  openModal('modal-tx');
-}
-function saveTransaction(){
-  const date=document.getElementById('ftx-date').value;
-  const libelle=document.getElementById('ftx-libelle').value.trim();
-  const montant=parseFloat(document.getElementById('ftx-montant').value);
-  if(!date||!libelle||!montant){showToast('⚠ Date, libellé et montant requis');return;}
-  const data={
-    id:editingTx||nextTxId(),
-    date,
-    compte:document.getElementById('ftx-compte').value,
-    type:'decaissement', // toujours décaissement (les encaissements viennent des factures)
-    categorie:document.getElementById('ftx-categorie').value,
-    libelle,montant,
-    devise:document.getElementById('ftx-devise').value,
-    notes:document.getElementById('ftx-facture').value, // champ réutilisé comme note
-  };
-  if(editingTx){const i=transactions.findIndex(t=>t.id===editingTx);if(i>=0)transactions[i]=data;showToast('✓ Décaissement mis à jour');}
-  else{transactions.push(data);showToast('✓ Décaissement ajouté');}
-  save();closeModal('modal-tx');renderTresorerie();
-}
-function deleteTx(id){if(!confirm('Supprimer cette transaction ?'))return;transactions=transactions.filter(t=>t.id!==id);save();renderTresorerie();showToast('↺ Supprimée');}
 
-// ═══════════════════════════════════════════════════════
-//  FILES
-// ═══════════════════════════════════════════════════════
-function handleFileInput(input,ctx){Array.from(input.files).forEach(f=>readFileCtx(f,ctx));input.value='';}
-function handleDrop(e,ctx){e.preventDefault();e.currentTarget.classList.remove('dragover');Array.from(e.dataTransfer.files).forEach(f=>readFileCtx(f,ctx));}
-function readFileCtx(file,ctx){const r=new FileReader();r.onload=ev=>{pendingFilesCtx[ctx].push({name:file.name,size:file.size,type:file.type,dataUrl:ev.target.result});renderAttached(ctx);};r.readAsDataURL(file);}
-function renderAttached(ctx){
-  const el=document.getElementById(ctx+'-attached');
-  el.innerHTML=pendingFilesCtx[ctx].map((f,i)=>`
-    <div class="att-file"><span class="att-icon">${fileIcon(f.name)}</span><div><div class="att-name">${f.name}</div><div class="att-size">${fmtSize(f.size)}</div></div>
-    <button class="att-del" onclick="pendingFilesCtx['${ctx}'].splice(${i},1);renderAttached('${ctx}')">✕</button></div>`).join('');
-}
-function quickAddFile(ctx,id){
-  const input=document.createElement('input');
-  input.type='file';input.multiple=true;input.accept='.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip';
-  input.style.cssText='position:fixed;top:-9999px;left:-9999px;opacity:0;';
-  document.body.appendChild(input);
-  input.onchange=function(){
-    Array.from(input.files).forEach(function(f){
-      const r=new FileReader();
-      r.onload=function(ev){
-        const arr=ctx==='prospect'?prospects:factures;
-        const item=arr.find(function(x){return x.id===id;});
-        if(item){
-          if(!item.files)item.files=[];
-          item.files.push({name:f.name,size:f.size,type:f.type,dataUrl:ev.target.result});
-          save();
-          if(ctx==='prospect')renderPipeline();else renderFacturation();
-          showToast('📎 '+f.name+' ajouté');
-        }
-      };
-      r.readAsDataURL(f);
-    });
-    document.body.removeChild(input);
-  };
-  input.click();
-}
-function downloadFile(ctx,id,fi){
-  const arr=ctx==='prospect'?prospects:factures;
-  const item=arr.find(x=>x.id===id);if(!item)return;
-  const f=(item.files||[])[fi];if(!f)return;
-  const a=document.createElement('a');a.href=f.dataUrl;a.download=f.name;a.click();
-}
-function removeFile(ctx,id,fi){
-  const arr=ctx==='prospect'?prospects:factures;
-  const item=arr.find(x=>x.id===id);if(!item||!item.files)return;
-  item.files.splice(fi,1);save();
-  if(ctx==='prospect')renderPipeline();else renderFacturation();
-}
-
-// Upload PDF vers Supabase Storage pour un prospect
-async function prospectUploadPdf(prospectId, input) {
-  const file = input.files && input.files[0];
-  if (!file) return;
-  const p = prospects.find(x => x.id === prospectId);
-  if (!p) return;
-  const fileName = 'prospect_' + prospectId + '_' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  try {
-    showToast('📤 Upload PDF en cours…');
-    const resp = await fetch(
-      SB_URL + '/storage/v1/object/task-pdfs/' + fileName,
-      {
-        method: 'POST',
-        headers: {
-          'apikey': SB_KEY,
-          'Authorization': 'Bearer ' + SB_KEY,
-          'Content-Type': 'application/pdf',
-          'x-upsert': 'true'
-        },
-        body: file
-      }
-    );
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error('HTTP ' + resp.status + ' — ' + err);
-    }
-    if (!p.pdf_files) p.pdf_files = [];
-    p.pdf_files.push({
-      url: SB_URL + '/storage/v1/object/public/task-pdfs/' + fileName,
-      name: file.name
-    });
-    save();
-    renderPipeline();
-    showToast('✅ PDF joint : ' + file.name.substring(0, 30));
-  } catch(e) {
-    console.error('[PDF Prospect Upload]', e);
-    showToast('❌ Erreur upload PDF : ' + e.message.substring(0, 60));
-  }
-  input.value = '';
-}
-
-// Supprimer un PDF Supabase d'un prospect
-async function prospectRemovePdf(prospectId, pi) {
-  const p = prospects.find(x => x.id === prospectId);
-  if (!p || !p.pdf_files || !p.pdf_files[pi]) return;
-  const pf = p.pdf_files[pi];
-  const fileName = pf.url.split('/task-pdfs/').pop();
-  try {
-    await fetch(SB_URL + '/storage/v1/object/task-pdfs/' + fileName, {
-      method: 'DELETE',
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-    });
-  } catch(e) { console.warn('[PDF Prospect Delete]', e); }
-  p.pdf_files.splice(pi, 1);
-  save();
-  renderPipeline();
-  showToast('🗑 PDF supprimé');
-}
-
-// ═══════════════════════════════════════════════════════
-//  DETAIL PANEL
-// ═══════════════════════════════════════════════════════
-function showDetail(ctx,id){
-  if(ctx==='prospect'){
-    const p=prospects.find(x=>x.id===id);if(!p)return;
-    document.getElementById('dp-title').textContent=p.entreprise;
-    document.getElementById('dp-sub').textContent=[p.contact,p.email,p.telephone].filter(Boolean).join(' · ')||'—';
-    const pond=(p.montant||0)*(p.proba||0)/100;
-    document.getElementById('dp-body').innerHTML=`
-      <div class="dp-sec"><div class="dp-sec-title">Statut</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${statutBadge(p.statut)} ${tempBadge(p.temperature)}</div>
-        <div class="dp-grid">
-          <div class="dp-field"><label>Source</label><div class="val">${p.source||'—'}</div></div>
-          <div class="dp-field"><label>Responsable</label><div class="val">${p.responsable||'—'}</div></div>
-        </div>
-      </div>
-      <div class="dp-sec"><div class="dp-sec-title">Financier</div>
-        <div class="dp-grid">
-          <div class="dp-field"><label>N° Devis</label><div class="val">${p.num_devis||'—'}</div></div>
-          <div class="dp-field"><label>Montant</label><div class="val" style="font-family:'Syne',sans-serif;font-weight:700">${fmtEur(p.montant)}</div></div>
-          <div class="dp-field"><label>Pondéré</label><div class="val" style="color:var(--blue);font-weight:700">${fmtEur(pond)}</div></div>
-          <div class="dp-field"><label>Date devis</label><div class="val">${fmtDate(p.date_devis)}</div></div>
-          <div class="dp-field"><label>Relance</label><div class="val">${fmtDate(p.date_relance)}</div></div>
-        </div>
-      </div>
-      <div class="dp-sec"><div class="dp-sec-title">Progression</div>
-        <div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px"><span>Réalisation</span><strong style="color:${pColor(p.realisation||0)}">${p.realisation||0}%</strong></div><div style="background:#e8e4dc;height:8px"><div style="height:100%;width:${p.realisation||0}%;background:${pColor(p.realisation||0)}"></div></div></div>
-        <div><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px"><span>Closing</span><strong style="color:${pColor(p.proba||0)}">${p.proba||0}%</strong></div><div style="background:#e8e4dc;height:8px"><div style="height:100%;width:${p.proba||0}%;background:${pColor(p.proba||0)}"></div></div></div>
-      </div>
-      ${(p.files||[]).length?`<div class="dp-sec"><div class="dp-sec-title">Fichiers (${p.files.length})</div>${p.files.map((f,i)=>`<div class="dp-file-item" onclick="downloadFile('prospect','${p.id}',${i})">${fileIcon(f.name)} ${f.name} <span style="margin-left:auto;font-size:9px;color:var(--muted)">${fmtSize(f.size)}</span></div>`).join('')}</div>`:''}
-      ${p.notes?`<div class="dp-sec"><div class="dp-sec-title">Notes</div><div style="font-size:11px;line-height:1.7;white-space:pre-wrap;word-break:break-word">${p.notes}</div></div>`:''}
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <button class="btn btn-primary btn-sm" onclick="closeDetail();openProspectModal('${p.id}')">✎ Modifier</button>
-        <button class="btn btn-ghost btn-sm" style="color:var(--ink);border-color:var(--ink)" onclick="quickAddFile('prospect','${p.id}');closeDetail()">+📎</button>
-      </div>`;
-  } else if(ctx==='facture'){
-    const f=factures.find(x=>x.id===id);if(!f)return;
-    const reste=(f.montant_ttc||0)-(f.montant_paye||0);
-    document.getElementById('dp-title').textContent=f.num;
-    document.getElementById('dp-sub').textContent=f.client;
-    document.getElementById('dp-body').innerHTML=`
-      <div class="dp-sec"><div class="dp-sec-title">Statut</div>${factureBadge(f.statut)}</div>
-      <div class="dp-sec"><div class="dp-sec-title">Montants</div>
-        <div class="dp-grid">
-          <div class="dp-field"><label>HT</label><div class="val">${fmtEur(f.montant_ht)}</div></div>
-          <div class="dp-field"><label>TVA</label><div class="val">${f.tva||0}%</div></div>
-          <div class="dp-field"><label>TTC</label><div class="val" style="color:var(--blue);font-weight:700">${fmtEur(f.montant_ttc)}</div></div>
-          <div class="dp-field"><label>Payé</label><div class="val" style="color:var(--green);font-weight:700">${fmtEur(f.montant_paye||0)}</div></div>
-          <div class="dp-field"><label>Restant</label><div class="val" style="color:${reste>0?'var(--red)':'var(--green)'};font-weight:700">${fmtEur(reste)}</div></div>
-        </div>
-      </div>
-      <div class="dp-sec"><div class="dp-sec-title">Dates</div>
-        <div class="dp-grid">
-          <div class="dp-field"><label>Émission</label><div class="val">${fmtDate(f.date_emission)}</div></div>
-          <div class="dp-field"><label>Échéance</label><div class="val">${fmtDate(f.date_echeance)}</div></div>
-        </div>
-      </div>
-      ${(f.files||[]).length?`<div class="dp-sec"><div class="dp-sec-title">Fichiers (${f.files.length})</div>${f.files.map((fl,i)=>`<div class="dp-file-item" onclick="downloadFile('facture','${f.id}',${i})">${fileIcon(fl.name)} ${fl.name}</div>`).join('')}</div>`:''}
-      ${f.notes?`<div class="dp-sec"><div class="dp-sec-title">Notes</div><div style="font-size:11px;line-height:1.7;white-space:pre-wrap">${f.notes}</div></div>`:''}
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <button class="btn btn-primary btn-sm" onclick="closeDetail();openFactureModal('${f.id}')">✎ Modifier</button>
-        <button class="btn btn-success btn-sm" onclick="closeDetail();marquerPayee('${f.id}')">✓ Marquer payée</button>
-      </div>`;
-  }
-  document.getElementById('detail-overlay').classList.add('open');
-}
-function closeDetail(){document.getElementById('detail-overlay').classList.remove('open');}
-
-// ═══════════════════════════════════════════════════════
-//  MODAL HELPERS
-// ═══════════════════════════════════════════════════════
-function openModal(id){document.getElementById(id).classList.add('open');}
-function closeModal(id){document.getElementById(id).classList.remove('open');if(id==='modal-prospect'){editingProspect=null;pendingFilesCtx.prospect=[];}if(id==='modal-facture'){editingFacture=null;pendingFilesCtx.facture=[];}if(id==='modal-tx')editingTx=null;}
-
-function populateClientSelects(){
-  const clients=[...new Set(prospects.map(p=>p.entreprise).filter(Boolean))].sort();
-  const selFF=document.getElementById('ff-client');
-  const curFF=selFF.value;
-  selFF.innerHTML='<option value="">— Sélectionner —</option>'+clients.map(c=>`<option ${c===curFF?'selected':''}>${c}</option>`).join('');
-  const selFact=document.getElementById('filter-fclient');
-  const curFact=selFact.value;
-  selFact.innerHTML='<option value="">Tous les clients</option>'+clients.map(c=>`<option ${c===curFact?'selected':''}>${c}</option>`).join('');
-  const selTxFact=document.getElementById('ftx-facture');
-  const curTx=selTxFact.value;
-  selTxFact.innerHTML='<option value="">— Aucune —</option>'+factures.map(f=>`<option value="${f.id}" ${f.id===curTx?'selected':''}>${f.num} — ${f.client}</option>`).join('');
-}
-
-// ═══════════════════════════════════════════════════════
-//  EXPORT CSV
-// ═══════════════════════════════════════════════════════
-function exportCSV(){
-  const h=['ID','Entreprise','Contact','Source','Statut','Montant','%Closing','Responsable'];
-  const rows=prospects.map(p=>[p.id,p.entreprise,p.contact,p.source,p.statut,p.montant,p.proba,p.responsable].map(v=>`"${String(v||'').replace(/"/g,'""')}"`));
-  const csv=[h.join(','),...rows.map(r=>r.join(','))].join('\n');
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=`eastrategies_${new Date().toISOString().split('T')[0]}.csv`;a.click();
-  showToast('⬇ Export téléchargé');
-}
-
-// ═══════════════════════════════════════════════════════
-//  TOAST / KEYBOARD
-// ═══════════════════════════════════════════════════════
-function showToast(msg,dur=2500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(showToast._t);showToast._t=setTimeout(()=>t.classList.remove('show'),dur);}
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){['modal-prospect','modal-facture','modal-tx'].forEach(closeModal);closeDetail();}
-  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){
-    if(document.getElementById('modal-prospect').classList.contains('open'))saveProspect();
-    if(document.getElementById('modal-facture').classList.contains('open'))saveFacture();
-    if(document.getElementById('modal-tx').classList.contains('open'))saveTransaction();
-  }
-});
-
-
-// ═══════════════════════════════════════════════════════
-//  RÉSULTAT ANNUEL
-// ═══════════════════════════════════════════════════════
-const CHARGES_LABELS = {
-  salaires:'Salaires & charges',loyer:'Loyer & bureau',compta:'Comptabilité/Juridique',
-  informatique:'Informatique',deplacement:'Déplacements',communication:'Communication',
-  sous_traitance:'Sous-traitance',banque:'Frais bancaires',autres:'Autres charges'
-};
-const CHARGES_KEYS = ['salaires','loyer','compta','informatique','deplacement','communication','sous_traitance','banque','autres'];
-let raData = {}; // {year: {charges:{key:[12]}, tvad:[12], pret:{...}}}
-
-function getRaYear(){ return parseInt(document.getElementById('ra-year')?.value||'2026'); }
-
-function loadResultat(){
-  try{
-    const raw=localStorage.getItem(SK+'_ra');
-    if(raw) raData=JSON.parse(raw);
-  }catch(e){}
-}
-function saveResultat(){
-  const y=getRaYear();
-  if(!raData[y]) raData[y]={charges:{},tvad:[],pret:{}};
-  // Charges
-  CHARGES_KEYS.forEach(k=>{
-    raData[y].charges[k]=Array.from({length:12},(_,i)=>{
-      const v=parseFloat(document.getElementById('ch-'+k+'-'+i)?.value||'');
-      return isNaN(v)?0:v;
-    });
-  });
-  // TVA déductible
-  raData[y].tvad=Array.from({length:12},(_,i)=>{
-    const v=parseFloat(document.getElementById('tvad-'+i)?.value||'');
-    return isNaN(v)?0:v;
-  });
-  // Prêt
-  raData[y].pret={
-    montant:parseFloat(document.getElementById('pret-montant')?.value||'')||0,
-    debut:document.getElementById('pret-debut')?.value||'',
-    duree:parseInt(document.getElementById('pret-duree')?.value||'')||0,
-    taux:parseFloat(document.getElementById('pret-taux')?.value||'')||0,
-    rembourse:parseFloat(document.getElementById('pret-rembourse')?.value||'')||0,
-  };
-  try{ localStorage.setItem(SK+'_ra', JSON.stringify(raData)); }catch(e){}
-}
-
-function loadRaInputs(){
-  const y=getRaYear();
-  const d=raData[y]||{};
-  CHARGES_KEYS.forEach(k=>{
-    const arr=(d.charges||{})[k]||[];
-    for(let i=0;i<12;i++){
-      const el=document.getElementById('ch-'+k+'-'+i);
-      if(el) el.value=arr[i]?arr[i]:'';
-    }
-  });
-  const tvad=(d.tvad)||[];
-  for(let i=0;i<12;i++){
-    const el=document.getElementById('tvad-'+i);
-    if(el) el.value=tvad[i]?tvad[i]:'';
-  }
-  const p=(d.pret)||{};
-  ['montant','debut','duree','taux','rembourse'].forEach(k=>{
-    const el=document.getElementById('pret-'+k);
-    if(el) el.value=p[k]||'';
-  });
-}
-
-function updatePret(){
-  const montant=parseFloat(document.getElementById('pret-montant')?.value||'')||0;
-  const duree=parseInt(document.getElementById('pret-duree')?.value||'')||0;
-  const tauxAnn=parseFloat(document.getElementById('pret-taux')?.value||'')||0;
-  const rembourse=parseFloat(document.getElementById('pret-rembourse')?.value||'')||0;
-  if(!montant||!duree){
-    ['pret-mensualite','pret-restant','pret-total-int','pret-echeances-restantes'].forEach(id=>{
-      const el=document.getElementById(id); if(el) el.textContent='—';
-    });
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--muted);font-size:11px">
+      ${finFactures.length === 0 ? '📥 Aucune facture — importez votre export Pennylane dans l\'onglet Import' : 'Aucun résultat pour ces filtres'}
+    </td></tr>`;
+    if (totEl) totEl.textContent = '';
     return;
   }
-  const tauxMens=tauxAnn/100/12;
-  let mensualite;
-  if(tauxMens===0){ mensualite=montant/duree; }
-  else { mensualite=montant*tauxMens/(1-Math.pow(1+tauxMens,-duree)); }
-  const totalPaye=mensualite*duree;
-  const totalInt=totalPaye-montant;
-  const restant=Math.max(0,montant-rembourse);
-  const echeancesPayees=tauxMens===0?(rembourse/mensualite):Math.round(Math.log(1-(restant*tauxMens/mensualite))/Math.log(1+tauxMens)*-1);
-  const echeancesRestantes=Math.max(0,duree-Math.floor(rembourse/mensualite));
-  document.getElementById('pret-mensualite').textContent=fmtEur(Math.round(mensualite));
-  document.getElementById('pret-restant').textContent=fmtEur(Math.round(restant));
-  document.getElementById('pret-total-int').textContent=fmtEur(Math.round(totalInt));
-  document.getElementById('pret-echeances-restantes').textContent=echeancesRestantes+' mois';
-  document.getElementById('pret-restant-header').textContent='Capital restant : '+fmtEur(Math.round(restant));
+
+  body.innerHTML = rows.map(f => `<tr>
+    <td style="font-family:'IBM Plex Mono',monospace;font-weight:700">${f.numero||'—'}</td>
+    <td>${FMT_DISP(f.date)}</td>
+    <td>${FMT_DISP(f.echeance)}</td>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${f.tiers||''}">${f.tiers||'—'}</td>
+    <td style="text-align:right">${FMT_EUR(f.ht)}</td>
+    <td style="text-align:right;color:var(--muted)">${FMT_EUR(f.tva)}</td>
+    <td style="text-align:right;font-weight:700">${FMT_EUR(f.ttc)}</td>
+    <td style="text-align:right;color:#2e7d32">${FMT_EUR(f.paye)}</td>
+    <td style="text-align:right;color:${f.restant>0?'#c62828':'var(--muted)'}">${FMT_EUR(f.restant)}</td>
+    <td>${finGetStatutBadge(f.statut)}</td>
+  </tr>`).join('');
+
+  const totHT = rows.reduce((s,f) => s + (f.ht||0), 0);
+  const totTTC = rows.reduce((s,f) => s + (f.ttc||0), 0);
+  const totPaye = rows.reduce((s,f) => s + (f.paye||0), 0);
+  const totRestant = rows.reduce((s,f) => s + (f.restant||0), 0);
+  if (totEl) totEl.innerHTML = `<strong>${rows.length} factures</strong> — HT : <strong>${FMT_EUR(totHT)}</strong> | TTC : <strong>${FMT_EUR(totTTC)}</strong> | Payé : <strong style="color:#2e7d32">${FMT_EUR(totPaye)}</strong> | Restant : <strong style="color:#c62828">${FMT_EUR(totRestant)}</strong>`;
 }
 
-function renderResultat(){
-  loadRaInputs();
-  const y=getRaYear();
-  const yStr=String(y);
+// ── TRÉSORERIE ────────────────────────────────────────
+function finRenderTresorerie() {
+  const body = document.getElementById('fin-tres-body');
+  const kpis = document.getElementById('fin-kpis-tres');
+  if (!body) return;
 
-  // ── VENTES par mois depuis factures ──
-  const ventesHT=Array(12).fill(0);
-  const ventesEnc=Array(12).fill(0);
-  const tvaCol=Array(12).fill(0);
-  factures.forEach(f=>{
-    if(!f.date_emission||!f.date_emission.startsWith(yStr)) return;
-    if(['Annulée'].includes(f.statut)) return;
-    const m=parseInt(f.date_emission.split('-')[1])-1;
-    if(m<0||m>11) return;
-    ventesHT[m]+=(f.montant_ht||0);
-    ventesEnc[m]+=(f.montant_paye||0);
-    tvaCol[m]+=Math.max(0,(f.montant_ttc||0)-(f.montant_ht||0));
+  const fMois = document.getElementById('fin-t-mois')?.value || '';
+  const fType = document.getElementById('fin-t-type')?.value || '';
+
+  const allTx = [
+    ...finTransactions.map(t => ({ ...t, _source: 'pennylane' })),
+    ...finDecaissements.map(t => ({ ...t, _source: 'manuel' }))
+  ].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  let rows = allTx.filter(t => {
+    if (fMois && String(t.mois||parseInt((t.date||'').substring(5,7))) !== fMois) return false;
+    if (fType === 'credit' && (t.montant||0) <= 0) return false;
+    if (fType === 'debit'  && (t.montant||0) >= 0) return false;
+    return true;
   });
 
-  const tbody=document.getElementById('ra-ventes-body');
-  if(tbody){
-    const MFULL=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-    tbody.innerHTML=Array.from({length:12},(_,i)=>{
-      const ht=ventesHT[i],enc=ventesEnc[i],tva=tvaCol[i];
-      return `<tr>
-        <td class="ra-month-lbl">${MFULL[i]}</td>
-        <td class="ra-auto" style="color:var(--blue)">${ht?fmtEur(ht):'—'}</td>
-        <td class="ra-auto" style="color:var(--green)">${enc?fmtEur(enc):'—'}</td>
-        <td class="ra-auto" style="color:var(--orange)">${tva?fmtEur(tva):'—'}</td>
-      </tr>`;
-    }).join('')+`<tr class="ra-row-total">
-      <td class="ra-month-lbl">TOTAL</td>
-      <td class="ra-auto" style="color:var(--blue)">${fmtEur(ventesHT.reduce((a,b)=>a+b,0))}</td>
-      <td class="ra-auto" style="color:var(--green)">${fmtEur(ventesEnc.reduce((a,b)=>a+b,0))}</td>
-      <td class="ra-auto" style="color:var(--orange)">${fmtEur(tvaCol.reduce((a,b)=>a+b,0))}</td>
-    </tr>`;
-  }
-  const el=document.getElementById('ra-ventes-total');
-  if(el) el.textContent=fmtEur(ventesHT.reduce((a,b)=>a+b,0));
+  // KPIs
+  const encaiss = rows.filter(t => t.montant > 0).reduce((s,t) => s + t.montant, 0);
+  const decaiss = rows.filter(t => t.montant < 0).reduce((s,t) => s + t.montant, 0);
+  const solde = encaiss + decaiss;
+  if (kpis) kpis.innerHTML = `
+    <div class="fin-kpi"><div class="fin-kpi-accent" style="background:#2e7d32"></div>
+      <div class="fin-kpi-label">Encaissements</div>
+      <div class="fin-kpi-value" style="color:#2e7d32">${FMT_EUR(encaiss)}</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-accent" style="background:#c62828"></div>
+      <div class="fin-kpi-label">Décaissements</div>
+      <div class="fin-kpi-value" style="color:#c62828">${FMT_EUR(decaiss)}</div></div>
+    <div class="fin-kpi"><div class="fin-kpi-accent" style="background:${solde>=0?'#1a1aff':'#c62828'}"></div>
+      <div class="fin-kpi-label">Solde net</div>
+      <div class="fin-kpi-value" style="color:${solde>=0?'#1a1aff':'#c62828'}">${FMT_EUR(solde)}</div></div>
+  `;
 
-  // ── CHARGES ──
-  const d=raData[y]||{};
-  const chargesParMois=Array(12).fill(0);
-  CHARGES_KEYS.forEach(k=>{
-    const arr=(d.charges||{})[k]||[];
-    let tot=0;
-    for(let i=0;i<12;i++){
-      const v=arr[i]||0;
-      chargesParMois[i]+=v;
-      tot+=v;
-    }
-    const te=document.getElementById('ch-tot-'+k); if(te) te.textContent=tot?fmtEur(tot):'—';
-  });
-  for(let i=0;i<12;i++){
-    const ce=document.getElementById('ch-col-'+i);
-    if(ce) ce.textContent=chargesParMois[i]?fmtEur(chargesParMois[i]):'—';
-  }
-  const grandTot=chargesParMois.reduce((a,b)=>a+b,0);
-  const gte=document.getElementById('ch-grand-total'); if(gte) gte.textContent=fmtEur(grandTot);
-  const cte=document.getElementById('ra-charges-total'); if(cte) cte.textContent=fmtEur(grandTot);
-
-  // ── TVA ──
-  const tvad=(d.tvad)||[];
-  let tvaCTotal=0,tvadTotal=0,tvaNTotal=0;
-  for(let i=0;i<12;i++){
-    const tc=tvaCol[i],td2=tvad[i]||0,tn=Math.max(0,tc-td2);
-    tvaCTotal+=tc; tvadTotal+=td2; tvaNTotal+=tn;
-    const tce=document.getElementById('tva-col-'+i); if(tce) tce.textContent=tc?fmtEur(tc):'—';
-    const tne=document.getElementById('tva-nette-'+i);
-    if(tne){tne.textContent=tn?fmtEur(tn):'—';tne.style.color=tn>0?'var(--red)':tn<0?'var(--green)':'var(--muted)';}
-  }
-  const tvaCte=document.getElementById('tva-col-tot'); if(tvaCte) tvaCte.textContent=fmtEur(tvaCTotal);
-  const tvadTe=document.getElementById('tvad-tot'); if(tvadTe) tvadTe.textContent=fmtEur(tvadTotal);
-  const tvaNTe=document.getElementById('tva-nette-tot'); if(tvaNTe){tvaNTe.textContent=fmtEur(tvaNTotal);tvaNTe.style.color=tvaNTotal>0?'var(--red)':'var(--green)';}
-  const tvaTotalEl=document.getElementById('ra-tva-total'); if(tvaTotalEl) tvaTotalEl.textContent=fmtEur(tvaNTotal);
-
-  // ── SYNTHÈSE ──
-  const synth=document.getElementById('ra-synth-body');
-  if(synth){
-    const rows=[
-      {label:'Ventes HT',vals:ventesHT,cls:'',color:'var(--blue)'},
-      {label:'Charges totales',vals:chargesParMois,cls:'',color:'var(--red)',neg:true},
-      {label:'Résultat brut',vals:ventesHT.map((v,i)=>v-chargesParMois[i]),cls:'result',color:''},
-      {label:'TVA nette à payer',vals:tvaCol.map((v,i)=>Math.max(0,v-(tvad[i]||0))),cls:'tva-row',color:'var(--orange)',neg:true},
-    ];
-    synth.innerHTML=rows.map(r=>{
-      const annuel=r.vals.reduce((a,b)=>a+b,0);
-      const isResult=r.label.startsWith('Résultat');
-      const rowCls=isResult?(annuel>=0?'result-pos':'result-neg'):r.cls+'-row';
-      const cells=r.vals.map(v=>{
-        const c=isResult?(v>=0?'var(--green)':'var(--red)'):(r.neg?'var(--red)':r.color);
-        return `<td style="color:${c}">${v?fmtEur(v):'—'}</td>`;
-      }).join('');
-      const annCls=isResult?(annuel>=0?'cell-pos':'cell-neg'):'';
-      return `<tr class="${rowCls}"><td>${r.label}</td>${cells}<td class="${annCls}" style="font-weight:700">${fmtEur(annuel)}</td></tr>`;
-    }).join('');
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--muted);font-size:11px">
+      ${allTx.length === 0 ? '📥 Aucune transaction — importez votre export Pennylane ou ajoutez un décaissement manuel' : 'Aucun résultat pour ces filtres'}
+    </td></tr>`;
+    return;
   }
 
-  // ── DEVIS À FACTURER ──
-  const devisBody=document.getElementById('ra-devis-body');
-  const devisProspects=prospects.filter(p=>p.statut==='Devis accepté'&&(p.montant||0)>0);
-  const devisTotal=devisProspects.reduce((s,p)=>s+(p.montant||0),0);
-  const dte=document.getElementById('ra-devis-total'); if(dte) dte.textContent=fmtEur(devisTotal);
-  if(devisBody){
-    if(!devisProspects.length){
-      devisBody.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Aucun devis accepté avec montant</td></tr>`;
-    } else {
-      devisBody.innerHTML=devisProspects.map(p=>`<tr>
-        <td><strong>${p.entreprise}</strong></td>
-        <td style="color:var(--muted)">${p.num_devis||'—'}</td>
-        <td class="ra-auto" style="color:var(--blue)">${fmtEur(p.montant)}</td>
-        <td style="text-align:center"><div style="background:#e8e4dc;height:6px;width:80px;display:inline-block"><div style="height:100%;width:${p.realisation||0}%;background:${pColor(p.realisation||0)}"></div></div> <span style="font-size:9px;font-weight:700;color:${pColor(p.realisation||0)}">${p.realisation||0}%</span></td>
-        <td style="text-align:center;font-size:10px;font-weight:700;color:${pColor(p.proba||0)}">${p.proba||0}%</td>
-        <td style="font-size:10px">${p.responsable||'—'}</td>
-        <td style="font-size:10px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.notes||'—'}</td>
-      </tr>`).join('');
-    }
-  }
-
-  updatePret();
+  body.innerHTML = rows.map((t,i) => `<tr style="${t._source==='manuel'?'background:#fffde7':''}" >
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:11px">${(t.date||'').substring(0,10).split('-').reverse().join('/')}</td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.libelle||''}">${t.libelle||'—'}</td>
+    <td style="font-size:11px">${t.tiers||'—'}</td>
+    <td style="font-size:10px;color:var(--muted)">${(t.compte||'').replace('est-strategies-2355-bank-account-1','Qonto principal')}</td>
+    <td style="font-size:10px">${t.categorie||'—'}</td>
+    <td style="text-align:right;font-weight:700;color:${(t.montant||0)>=0?'#2e7d32':'#c62828'}">${FMT_EUR(t.montant)}</td>
+    <td><span class="fin-badge ${(t.montant||0)>=0?'credit':'debit'}">${(t.montant||0)>=0?'Encaissement':'Décaissement'}</span></td>
+    <td>${t._source==='manuel'?`<button onclick="finDeleteDecaissement(${i})" style="background:none;border:none;cursor:pointer;color:#e53935;font-size:12px" title="Supprimer">🗑</button>`:''}</td>
+  </tr>`).join('');
 }
+
+function finAddDecaissement() {
+  const modal = document.getElementById('fin-modal-decaiss');
+  if (!modal) return;
+  document.getElementById('fin-d-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('fin-d-libelle').value = '';
+  document.getElementById('fin-d-tiers').value = '';
+  document.getElementById('fin-d-cat').value = '';
+  document.getElementById('fin-d-montant').value = '';
+  document.getElementById('fin-d-comment').value = '';
+  modal.style.display = 'flex';
+}
+
+function finSaveDecaissement() {
+  const date    = document.getElementById('fin-d-date').value;
+  const libelle = document.getElementById('fin-d-libelle').value.trim();
+  const tiers   = document.getElementById('fin-d-tiers').value.trim();
+  const cat     = document.getElementById('fin-d-cat').value;
+  const montant = parseFloat(document.getElementById('fin-d-montant').value);
+  const comment = document.getElementById('fin-d-comment').value.trim();
+
+  if (!date || !libelle || isNaN(montant)) { showToast('⚠ Date, libellé et montant requis'); return; }
+  if (montant > 0) { showToast('⚠ Le montant doit être négatif (ex: -500)'); return; }
+
+  finDecaissements.push({
+    date, libelle, tiers, categorie: cat, montant, commentaire: comment,
+    mois: parseInt(date.substring(5,7)), etat: 'Manuel', compte: 'Manuel'
+  });
+  finSave();
+  document.getElementById('fin-modal-decaiss').style.display = 'none';
+  finRenderTresorerie();
+  showToast('✅ Décaissement enregistré');
+}
+
+function finDeleteDecaissement(idx) {
+  // Recalculer l'index dans finDecaissements
+  const allTx = [
+    ...finTransactions.map(t => ({ ...t, _source: 'pennylane' })),
+    ...finDecaissements.map(t => ({ ...t, _source: 'manuel' }))
+  ].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const fMois = document.getElementById('fin-t-mois')?.value || '';
+  const fType = document.getElementById('fin-t-type')?.value || '';
+  const rows = allTx.filter(t => {
+    if (fMois && String(t.mois||parseInt((t.date||'').substring(5,7))) !== fMois) return false;
+    if (fType === 'credit' && (t.montant||0) <= 0) return false;
+    if (fType === 'debit'  && (t.montant||0) >= 0) return false;
+    return true;
+  });
+  const row = rows[idx];
+  if (!row || row._source !== 'manuel') return;
+  const realIdx = finDecaissements.findIndex(d => d.date === row.date && d.libelle === row.libelle && d.montant === row.montant);
+  if (realIdx < 0) return;
+  if (!confirm('Supprimer ce décaissement ?')) return;
+  finDecaissements.splice(realIdx, 1);
+  finSave();
+  finRenderTresorerie();
+  showToast('🗑 Décaissement supprimé');
+}
+
+// ── COMPTE DE RÉSULTAT (depuis FEC) ──────────────────
+function finRenderCR() {
+  const el = document.getElementById('fin-cr-content');
+  if (!el) return;
+  const year = document.getElementById('fin-cr-year')?.value || '2026';
+
+  if (!finFEC.length && !finFactures.length) {
+    el.innerHTML = '<div class="fin-empty"><div class="fin-empty-icon">📈</div>Importez le FEC ou les factures Pennylane pour générer le compte de résultat</div>';
+    return;
+  }
+
+  // Produits depuis FEC (comptes 7xx) ou depuis factures si pas de FEC
+  let produits = 0;
+  let chargesMap = {};
+
+  if (finFEC.length) {
+    finFEC.filter(e => e.date && e.date.startsWith(year)).forEach(e => {
+      const c = e.compte || '';
+      if (c.startsWith('7')) produits += (e.credit - e.debit);
+      if (c.startsWith('6')) {
+        const key = c.substring(0,3);
+        chargesMap[key] = (chargesMap[key]||0) + (e.debit - e.credit);
+      }
+    });
+  } else {
+    // Fallback : calculer depuis les factures
+    finFactures.filter(f => {
+      const d = FMT_DATE(f.date);
+      return d && d.startsWith(year) && f.statut !== 'Annulée';
+    }).forEach(f => produits += (f.ht||0));
+  }
+
+  // Charges depuis transactions si pas de FEC
+  let totalCharges = Object.values(chargesMap).reduce((s,v) => s + v, 0);
+  if (!finFEC.length) {
+    totalCharges = finTransactions.filter(t => {
+      const d = (t.date||'').substring(0,4);
+      return d === year && (t.montant||0) < 0;
+    }).reduce((s,t) => s + Math.abs(t.montant), 0);
+    finDecaissements.filter(t => {
+      const d = (t.date||'').substring(0,4);
+      return d === year;
+    }).forEach(t => totalCharges += Math.abs(t.montant||0));
+  }
+
+  const resultat = produits - totalCharges;
+
+  // Tableau CR
+  let chargesRows = '';
+  if (Object.keys(chargesMap).length) {
+    const chargeLabels = {
+      '600':'Achats matières','601':'Achats matières','602':'Achats','604':'Achats études',
+      '606':'Achats non stockés','607':'Achats marchandises','611':'Sous-traitance',
+      '613':'Locations','614':'Charges locatives','615':'Entretien','616':'Assurances',
+      '617':'Études & recherches','618':'Divers','621':'Personnel extérieur',
+      '622':'Honoraires','623':'Publicité','624':'Transports','625':'Déplacements',
+      '626':'Frais postaux','627':'Frais bancaires','628':'Divers','631':'Impôts & taxes',
+      '641':'Salaires','645':'Charges sociales','651':'Redevances','661':'Intérêts',
+      '671':'Charges exceptionnelles'
+    };
+    Object.entries(chargesMap).sort().forEach(([k,v]) => {
+      if (v > 0.01) chargesRows += `<tr><td style="padding-left:20px">${chargeLabels[k] || 'Compte '+k}</td><td style="text-align:right">${FMT_EUR(v)}</td><td></td></tr>`;
+    });
+  } else {
+    chargesRows = `<tr><td style="padding-left:20px">Charges d'exploitation (transactions)</td><td style="text-align:right">${FMT_EUR(totalCharges)}</td><td></td></tr>`;
+  }
+
+  el.innerHTML = `
+    <table class="fin-cr-table">
+      <thead><tr><th>Poste</th><th style="text-align:right">Montant (€)</th><th style="text-align:right">%</th></tr></thead>
+      <tbody>
+        <tr class="fin-cr-section"><td colspan="3">PRODUITS D'EXPLOITATION</td></tr>
+        <tr><td style="padding-left:20px">Chiffre d'affaires HT</td>
+          <td style="text-align:right">${FMT_EUR(produits)}</td>
+          <td style="text-align:right">100%</td></tr>
+        <tr class="fin-cr-total"><td>Total produits</td>
+          <td style="text-align:right">${FMT_EUR(produits)}</td>
+          <td style="text-align:right">100%</td></tr>
+
+        <tr class="fin-cr-section"><td colspan="3">CHARGES D'EXPLOITATION</td></tr>
+        ${chargesRows}
+        <tr class="fin-cr-total"><td>Total charges</td>
+          <td style="text-align:right">${FMT_EUR(totalCharges)}</td>
+          <td style="text-align:right">${produits>0?Math.round(totalCharges/produits*100):0}%</td></tr>
+
+        <tr class="fin-cr-result"><td>RÉSULTAT D'EXPLOITATION</td>
+          <td style="text-align:right">${FMT_EUR(resultat)}</td>
+          <td style="text-align:right">${produits>0?Math.round(resultat/produits*100):0}%</td></tr>
+      </tbody>
+    </table>
+    <div style="font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace">
+      ${finFEC.length ? `Source : FEC (${finFEC.length} écritures)` : 'Source : Factures + Transactions (FEC non importé)'}
+      · Exercice ${year}
+    </div>`;
+}
+
+// ── IMPORT PENNYLANE ──────────────────────────────────
+function finRenderImportStatus() {
+  const s1 = document.getElementById('fin-status-factures');
+  const s2 = document.getElementById('fin-status-transactions');
+  const s3 = document.getElementById('fin-status-fec');
+  if (s1) s1.innerHTML = finFactures.length ? `<span style="color:#2e7d32">✅ ${finFactures.length} factures importées</span>` : '<span style="color:var(--muted)">Aucun fichier importé</span>';
+  if (s2) s2.innerHTML = finTransactions.length ? `<span style="color:#2e7d32">✅ ${finTransactions.length} transactions importées</span>` : '<span style="color:var(--muted)">Aucun fichier importé</span>';
+  if (s3) s3.innerHTML = finFEC.length ? `<span style="color:#2e7d32">✅ ${finFEC.length} écritures FEC importées</span>` : '<span style="color:var(--muted)">Aucun fichier importé</span>';
+}
+
+// Import Factures Excel
+function finImportFactures(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showToast('⏳ Lecture des factures…');
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      // Utiliser SheetJS si disponible, sinon CSV
+      if (typeof XLSX !== 'undefined') {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        finFactures = finParseFacturesRows(rows);
+      } else {
+        // Charger SheetJS dynamiquement
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        script.onload = function() {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+          finFactures = finParseFacturesRows(rows);
+          finSave();
+          finRenderImportStatus();
+          finRenderOverview();
+          showToast(`✅ ${finFactures.length} factures importées`);
+        };
+        document.head.appendChild(script);
+        return;
+      }
+      finSave();
+      finRenderImportStatus();
+      finRenderOverview();
+      showToast(`✅ ${finFactures.length} factures importées`);
+    } catch(err) {
+      showToast('⚠ Erreur lecture : ' + err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function finParseFacturesRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  const headers = rows[0].map(h => (h||'').toString().trim());
+  const idx = (name) => headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+  const iId = idx('Identifiant facture');
+  const iNum = idx('Numéro');
+  const iDate = idx('Date');
+  const iEch = idx('Échéance');
+  const iTiers = idx('Tiers');
+  const iTTC = idx('Total TTC');
+  const iTVA = idx('Total TVA');
+  const iHT = idx('Total HT');
+  const iStatut = idx('Statut');
+  const iPaye = idx('Montant payé');
+  const iRestant = idx('Montant restant');
+  const iDatePaie = idx('Date de paiement');
+
+  return rows.slice(1).filter(r => r && r[iNum]).map(r => {
+    const parseNum = (v) => {
+      if (v === null || v === undefined || v === '') return 0;
+      if (typeof v === 'number') return v;
+      return parseFloat(String(v).replace(/[^0-9.,-]/g,'').replace(',','.')) || 0;
+    };
+    const parseDate = (v) => {
+      if (!v) return '';
+      if (typeof v === 'number') {
+        // Date Excel sérialisée
+        const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+        return d.toISOString().split('T')[0].split('-').reverse().join('/');
+      }
+      return String(v);
+    };
+    return {
+      id: r[iId] || '',
+      numero: r[iNum] || '',
+      date: parseDate(r[iDate]),
+      echeance: parseDate(r[iEch]),
+      tiers: r[iTiers] || '',
+      ttc: parseNum(r[iTTC]),
+      tva: parseNum(r[iTVA]),
+      ht: parseNum(r[iHT]),
+      statut: r[iStatut] || '',
+      paye: parseNum(r[iPaye]),
+      restant: parseNum(r[iRestant]),
+      date_paiement: parseDate(r[iDatePaie])
+    };
+  }).filter(f => f.numero);
+}
+
+// Import Transactions Excel
+function finImportTransactions(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showToast('⏳ Lecture des transactions…');
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const loadXLSX = (data) => {
+      try {
+        const wb = XLSX.read(new Uint8Array(data), { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        finTransactions = finParseTransactionsRows(rows);
+        finSave();
+        finRenderImportStatus();
+        showToast(`✅ ${finTransactions.length} transactions importées`);
+      } catch(err) { showToast('⚠ Erreur : ' + err.message); }
+      input.value = '';
+    };
+    if (typeof XLSX !== 'undefined') { loadXLSX(e.target.result); return; }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    script.onload = () => loadXLSX(e.target.result);
+    document.head.appendChild(script);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function finParseTransactionsRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  const headers = rows[0].map(h => (h||'').toString().trim());
+  const idx = (name) => headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+  const iDate = idx('Date');
+  const iMois = idx('Mois');
+  const iCompte = idx('Compte');
+  const iLib = idx('Libellé');
+  const iMontant = idx('Montant');
+  const iTiers = idx('Tiers');
+  const iJust = idx('Justifié');
+  const iComment = idx('Commentaires');
+  const iEtat = idx('État');
+  const iType = idx('Type');
+  const iCat = idx('Types de dépenses');
+
+  return rows.slice(1).filter(r => r && r[iDate]).map(r => {
+    const parseDate = (v) => {
+      if (!v) return '';
+      if (typeof v === 'number') {
+        const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+        return d.toISOString().split('T')[0];
+      }
+      if (typeof v === 'string') {
+        const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+      }
+      return String(v).substring(0,10);
+    };
+    const d = parseDate(r[iDate]);
+    return {
+      date: d,
+      mois: r[iMois] ? parseInt(r[iMois]) : (d ? parseInt(d.substring(5,7)) : 0),
+      compte: r[iCompte] || '',
+      libelle: r[iLib] || '',
+      montant: typeof r[iMontant] === 'number' ? r[iMontant] : parseFloat(String(r[iMontant]||'0').replace(',','.')) || 0,
+      tiers: r[iTiers] || '',
+      justifie: r[iJust] || '',
+      commentaire: r[iComment] || '',
+      etat: r[iEtat] || '',
+      type: r[iType] || '',
+      categorie: r[iCat] || ''
+    };
+  }).filter(t => t.date);
+}
+
+// Import FEC (TXT tabulé)
+function finImportFEC(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showToast('⏳ Lecture du FEC…');
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const text = e.target.result;
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) throw new Error('Fichier vide');
+      const sep = lines[0].includes('	') ? '	' : '|';
+      const headers = lines[0].split(sep).map(h => h.trim());
+      const idx = (name) => headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+      const iJCode = idx('JournalCode');
+      const iDate = idx('EcritureDate');
+      const iCompte = idx('CompteNum');
+      const iLib = idx('CompteLib');
+      const iAux = idx('CompAuxLib');
+      const iPiece = idx('PieceRef');
+      const iEcrit = idx('EcritureLib');
+      const iDebit = idx('Debit');
+      const iCredit = idx('Credit');
+
+      finFEC = lines.slice(1).filter(Boolean).map(line => {
+        const cols = line.split(sep);
+        const parseAmt = (v) => parseFloat((v||'0').replace(',','.')) || 0;
+        return {
+          journal: cols[iJCode] || '',
+          date: cols[iDate] || '',
+          compte: cols[iCompte] || '',
+          lib_compte: cols[iLib] || '',
+          tiers: cols[iAux] || '',
+          piece: cols[iPiece] || '',
+          libelle: cols[iEcrit] || '',
+          debit: parseAmt(cols[iDebit]),
+          credit: parseAmt(cols[iCredit])
+        };
+      }).filter(e => e.date);
+
+      finSave();
+      finRenderImportStatus();
+      showToast(`✅ ${finFEC.length} écritures FEC importées`);
+    } catch(err) {
+      showToast('⚠ Erreur FEC : ' + err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function finResetData() {
+  if (!confirm('Effacer toutes les données Finance (factures, transactions, FEC, décaissements) ?')) return;
+  finFactures = []; finTransactions = []; finFEC = []; finDecaissements = [];
+  finSave();
+  finRenderImportStatus();
+  finRenderOverview();
+  showToast('🗑 Données Finance effacées');
+}
+
+// ── Render Finance quand on clique sur l'onglet ───────
+function renderFinance() {
+  finLoad();
+  finRenderOverview();
+}
+
+// ═══════════════════════════════════════════════════════
+//  RÉSULTAT ANNUEL (supprimé — remplacé par Finance)
+// ═══════════════════════════════════════════════════════
+function loadResultat() { /* remplacé par finLoad */ }
+function saveResultat()  { /* remplacé par finSave */ }
+function renderResultat(){ /* remplacé par finRenderCR */ }
 
 // ═══════════════════════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════════════════════
 load();
 loadSoldesInitiaux();
-loadResultat();
+finLoad();
 populateClientSelects();
 renderPipeline();
 renderDashboard();
@@ -3410,7 +3356,9 @@ function collectAllData() {
     transactions:JSON.parse(localStorage.getItem('transactions')     || '[]'),
     soldes:      JSON.parse(localStorage.getItem('soldesInitiaux')   || '{}'),
     charges:     JSON.parse(localStorage.getItem('chargesMensuelles')|| '{}'),
-    resultat:    JSON.parse(localStorage.getItem('resultatAnnuel')   || '{}'),
+    fin_factures:     JSON.parse(localStorage.getItem('fin_factures')      || '[]'),
+    fin_transactions: JSON.parse(localStorage.getItem('fin_transactions')  || '[]'),
+    fin_decaissements:JSON.parse(localStorage.getItem('fin_decaissements') || '[]'),
     pret:        JSON.parse(localStorage.getItem('pretConfig')       || '{}'),
     todos:       JSON.parse(localStorage.getItem('eastrategies_todos')|| '[]'),
     tasks:       JSON.parse(localStorage.getItem('todo_tasks')       || '[]'),
@@ -3427,7 +3375,9 @@ function restoreAllData(d) {
     ['transactions',      d.transactions],
     ['soldesInitiaux',    d.soldes],
     ['chargesMensuelles', d.charges],
-    ['resultatAnnuel',    d.resultat],
+    ['fin_factures',      d.fin_factures],
+    ['fin_transactions',  d.fin_transactions],
+    ['fin_decaissements', d.fin_decaissements],
     ['pretConfig',        d.pret],
     ['eastrategies_todos',d.todos],
     ['todo_tasks',        d.tasks],
@@ -3478,7 +3428,7 @@ async function doAutoSync() {
         // Remote is newer — restore it
         restoreAllData(remote);
         // Re-render everything
-        load(); loadSoldesInitiaux(); loadResultat();
+        load(); loadSoldesInitiaux(); finLoad();
         populateClientSelects(); renderPipeline(); renderDashboard(); updateGlobalKPIs();
         // Re-render active tab
         const activeTab = document.querySelector('.tab-btn.active');
@@ -7188,6 +7138,13 @@ function _sbApplyData(data) {
       _sbRemoteTs.tw_tasks = remoteTs;
       restored.push(twTasks.length + ' tâches');
     }
+    if (row.key === 'finance' && row.value) {
+      if (row.value.fin_factures)      { finFactures      = row.value.fin_factures;      localStorage.setItem('fin_factures',      JSON.stringify(finFactures)); }
+      if (row.value.fin_transactions)  { finTransactions  = row.value.fin_transactions;  localStorage.setItem('fin_transactions',  JSON.stringify(finTransactions)); }
+      if (row.value.fin_fec)           { finFEC           = row.value.fin_fec;           localStorage.setItem('fin_fec',           JSON.stringify(finFEC)); }
+      if (row.value.fin_decaissements) { finDecaissements = row.value.fin_decaissements; localStorage.setItem('fin_decaissements', JSON.stringify(finDecaissements)); }
+      restored.push('données Finance');
+    }
     if (row.key === 'crm' && row.value && row.value.crm_projects) {
       crmProjects = row.value.crm_projects;
       localStorage.setItem('crm_projects', JSON.stringify(crmProjects));
@@ -7202,10 +7159,11 @@ function _sbRefreshUI() {
   try { renderDashboard(); } catch(e) {}
   try { renderPipeline(); } catch(e) {}
   try { renderFacturation(); } catch(e) {}
-  try { renderTresorerie(); } catch(e) {}
+  try { if(typeof renderFinance==='function') renderFinance(); } catch(e) {}
   try { tpRender(); } catch(e) {}
   try { twRender(); } catch(e) {}
   try { crmRender(); } catch(e) {}
+  try { if(typeof finLoad==='function'){finLoad();} } catch(e) {}
   try { updateGlobalKPIs(); } catch(e) {}
   try { populateClientSelects(); } catch(e) {}
 }
@@ -7580,7 +7538,7 @@ function syncImport(input) {
       if (data.crm_projects) localStorage.setItem('crm_projects', JSON.stringify(data.crm_projects));
       // Recharger toutes les données en mémoire
       load(); tpLoad(); twLoad(); crmLoad();
-      renderDashboard(); renderPipeline(); renderFacturation(); renderTresorerie(); tpRender(); twRender();
+      renderDashboard(); renderPipeline(); renderFacturation(); tpRender(); twRender(); try{renderFinance();}catch(e){}
       const s = document.getElementById('sync-status');
       if (s) s.textContent = '✓ Importé — ' + (data.prospects||[]).length + ' prospects, ' + (data.factures||[]).length + ' factures';
       showToast('✓ Données importées avec succès');
