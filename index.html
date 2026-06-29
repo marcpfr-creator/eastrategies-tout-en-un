@@ -1753,44 +1753,7 @@ body.readonly-mode input, body.readonly-mode select, body.readonly-mode textarea
 </footer>
 
 <script>
-// ── PRÉ-CHARGEMENT DONNÉES CSV 2026-03-01 ──
-(function() {
-  const SK = 'eastrategies_v4';
-  const csvProspects = [{"id":"P001","entreprise":"ADM International Sarl","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_accepte","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":6000.0,"proba":100,"realisation":100,"files":[]},{"id":"P002","entreprise":"Junta de Catilla","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_envoye","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":12500.0,"proba":50,"realisation":0,"files":[]},{"id":"P003","entreprise":"Laboratoire du Haut Segala","contact":"","email":"","telephone":"","source":"SEO","statut":"devis_envoye","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"","notes":"","montant":11950.0,"proba":15,"realisation":0,"files":[]},{"id":"P004","entreprise":"CACIIS","contact":"","email":"","telephone":"","source":"Partenaire","statut":"devis_accepte","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":2800.0,"proba":100,"realisation":100,"files":[]},{"id":"P005","entreprise":"ELEMENT","contact":"Pierre-Alexandre Cichostepski","email":"","telephone":"","source":"Partenaire","statut":"premier_contact","temperature":"froid","num_devis":"","date_devis":"","date_relance":"","responsable":"Ldp","notes":"","montant":0,"proba":6,"realisation":0,"files":[]},{"id":"P006","entreprise":"AIRPLANE","contact":"Alain Gaudon","email":"","telephone":"","source":"Partenaire","statut":"premier_contact","temperature":"froid","num_devis":"","date_devis":"","date_relance":"","responsable":"LDP","notes":"","montant":0,"proba":0,"realisation":0,"files":[]},{"id":"P007","entreprise":"TEXEN","contact":"Alexandre Reynaud","email":"","telephone":"","source":"Partenaire","statut":"prospect","temperature":"tiede","num_devis":"","date_devis":"","date_relance":"","responsable":"LDP","notes":"","montant":0,"proba":0,"realisation":0,"files":[]},{"id":"P008","entreprise":"CETIH","contact":"Paul Toulouse","email":"","telephone":"","source":"Partenaire","statut":"premier_contact","temperature":"froid","num_devis":"","date_devis":"","date_relance":"","responsable":"","notes":"","montant":0,"proba":0,"realisation":0,"files":[]},{"id":"P009","entreprise":"Nashview","contact":"Robin Vigneron","email":"","telephone":"","source":"LinkedIn","statut":"premier_contact","temperature":"froid","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":0,"proba":0,"realisation":0,"files":[]},{"id":"P010","entreprise":"SNECI","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_accepte","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":3000.0,"proba":100,"realisation":100,"files":[]},{"id":"P011","entreprise":"BILLION SAS","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_accepte","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":0,"proba":100,"realisation":100,"files":[]},{"id":"P012","entreprise":"SMARTWAY","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_accepte","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":3000.0,"proba":100,"realisation":100,"files":[]},{"id":"P013","entreprise":"BUREL SOLUTIONS","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_accepte","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":2500.0,"proba":100,"realisation":100,"files":[]},{"id":"P014","entreprise":"SOCIETE FRANCAISE OUTILS PROFESSIONNELS","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_accepte","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":7000.0,"proba":100,"realisation":100,"files":[]},{"id":"P015","entreprise":"SBM DEVELOPPEMENT","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_envoye","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":1500.0,"proba":70,"realisation":0,"files":[]},{"id":"P016","entreprise":"STAPHYT REGULATORY","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_accepte","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":1000.0,"proba":100,"realisation":100,"files":[]},{"id":"P017","entreprise":"Staphyt UK","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_accepte","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":1000.0,"proba":100,"realisation":100,"files":[]},{"id":"P018","entreprise":"L'ECLAIRAGE TECHNIQUE ECLATEC SA","contact":"","email":"","telephone":"","source":"Autre","statut":"devis_envoye","temperature":"chaud","num_devis":"","date_devis":"","date_relance":"","responsable":"Marc Pascal Huot","notes":"","montant":3276.82,"proba":80,"realisation":0,"files":[]},{"id":"P019","entreprise":"Lavafrost","contact":"Mouelhi Walid","email":"","telephone":"","source":"Partenaire","statut":"premier_contact","temperature":"froid","num_devis":"","date_devis":"","date_relance":"","responsable":"","notes":"","montant":0,"proba":0,"realisation":0,"files":[]},{"id":"P020","entreprise":"SOLTECO MADERA PLASTICA SL","contact":"Jose Vicente Sainz Perez","email":"","telephone":"","source":"","statut":"premier_contact","temperature":"froid","num_devis":"","date_devis":"","date_relance":"","responsable":"","notes":"","montant":0,"proba":0,"realisation":0,"files":[]},{"id":"P021","entreprise":"acropolis-group","contact":"Nicolas Milonas","email":"","telephone":"","source":"Autre","statut":"premier_contact","temperature":"froid","num_devis":"","date_devis":"","date_relance":"","responsable":"","notes":"","montant":0,"proba":0,"realisation":0,"files":[]},{"id":"P022","entreprise":"Dekali","contact":"Alessandro Fadini","email":"","telephone":"","source":"Autre","statut":"premier_contact","temperature":"froid","num_devis":"","date_devis":"","date_relance":"","responsable":"","notes":"","montant":0,"proba":0,"realisation":0,"files":[]},{"id":"P023","entreprise":"SILBON","contact":"Pablo Lopez Carmona","email":"","telephone":"","source":"","statut":"premier_contact","temperature":"froid","num_devis":"","date_devis":"","date_relance":"","responsable":"","notes":"","montant":0,"proba":0,"realisation":0,"files":[]}];
-  try {
-    const raw = localStorage.getItem(SK);
-    const existing = raw ? JSON.parse(raw) : {};
-    const existingProspects = existing.prospects || [];
-    
-    // Merge: CSV data wins for matching IDs, keep extras from localStorage
-    const csvIds = new Set(csvProspects.map(p => p.id));
-    const localOnly = existingProspects.filter(p => !csvIds.has(p.id));
-    const _SMAP = {
-      'devis_accepte':'Devis accepté','devis_envoye':'Devis envoyé',
-      'premier_contact':'Premier contact','en_negociation':'En négociation',
-      'prospect':'Prospect','perdu':'Perdu',
-    };
-    const _TMAP = { 'chaud':'Chaud','tiede':'Tiède','tiedé':'Tiède','froid':'Froid' };
-    const normP = p => ({...p, statut:_SMAP[p.statut]||p.statut, temperature:_TMAP[p.temperature]||p.temperature});
-    // Also inject 100 leads industriels
-    const csvImportIds = new Set([...csvProspects.map(p=>p.id), ...localOnly.map(p=>p.id)]);
-    const freshImports = typeof CSV_PROSPECTS !== 'undefined'
-      ? CSV_PROSPECTS.filter(p => !csvImportIds.has(p.id)).map(normP)
-      : [];
-    const merged = [...csvProspects.map(normP), ...localOnly.map(normP), ...freshImports];
-    
-    const newData = {
-      prospects:    merged,
-      factures:     existing.factures    || [],
-      transactions: existing.transactions|| [],
-      saved:        new Date().toISOString()
-    };
-    localStorage.setItem(SK, JSON.stringify(newData));
-    console.log('[Eastrategies] ' + merged.length + ' prospects chargés depuis CSV (' + csvProspects.length + ' CSV + ' + localOnly.length + ' locaux)');
-  } catch(e) {
-    console.error('[Eastrategies] Erreur import CSV:', e);
-  }
-})();
+<!-- Script CSV auto-merge supprimé — données gérées par Supabase uniquement -->
 </script>
 <script>
 // ═══════════════════════════════════════════════════════
